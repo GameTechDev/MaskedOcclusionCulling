@@ -3,8 +3,12 @@
   <ItemGroup>
     <ClCompile Include="ExampleMain.cpp" />
     <ClCompile Include="..\MaskedOcclusionCulling.cpp" />
+    <ClCompile Include="..\MaskedOcclusionCullingAVX2.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\MaskedOcclusionCulling.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\MaskedOcclusionCullingCommon.inl" />
   </ItemGroup>
 </Project>

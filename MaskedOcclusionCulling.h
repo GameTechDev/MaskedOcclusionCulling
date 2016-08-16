@@ -25,7 +25,6 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-
 #pragma once
 
 /*!
@@ -69,8 +68,6 @@
 // Masked occlusion culling class
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-class MaskedOcclusionCullingPrivate;
-
 class MaskedOcclusionCulling 
 {
 public:
@@ -85,6 +82,12 @@ public:
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Enums
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	enum Implementation {
+		SSE2 = 0,
+		SSE41 = 1,
+		AVX2 = 2
+	};
 
 	enum CullingResult
 	{
@@ -124,8 +127,8 @@ public:
 		int mStride;  //< byte stride between vertices
 		int mOffsetY; //< byte offset from X to Y coordinate
 		union {
-			int mOffsetZ; //< byte offset from X to Z coordinate
-			int mOffsetW; //< byte offset from X to W coordinate
+			int mOffsetZ; //!< byte offset from X to Z coordinate
+			int mOffsetW; //!< byte offset from X to W coordinate
 		};
 	};
 
@@ -141,10 +144,10 @@ public:
 		ScissorRect(int minX, int minY, int maxX, int maxY) :
 			mMinX(minX), mMinY(minY), mMaxX(maxX), mMaxY(maxY) {}
 
-		int mMinX;	//< Screen space X coordinate for left side of scissor rect, inclusive and must be a multiple of 32
-		int mMinY;	//< Screen space Y coordinate for bottom side of scissor rect, inclusive and must be a multiple of 8
-		int mMaxX;	//< Screen space X coordinate for right side of scissor rect, <B>non</B> inclusive and must be a multiple of 32
-		int mMaxY;	//< Screen space Y coordinate for top side of scissor rect, <B>non</B> inclusive and must be a multiple of 8
+		int mMinX;	//!< Screen space X coordinate for left side of scissor rect, inclusive and must be a multiple of 32
+		int mMinY;	//!< Screen space Y coordinate for bottom side of scissor rect, inclusive and must be a multiple of 8
+		int mMaxX;	//!< Screen space X coordinate for right side of scissor rect, <B>non</B> inclusive and must be a multiple of 32
+		int mMaxY;	//!< Screen space Y coordinate for top side of scissor rect, <B>non</B> inclusive and must be a multiple of 8
 	};
 
 	struct OcclusionCullingStatistics
@@ -171,21 +174,22 @@ public:
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	/*!
-	 * \brief Initializes the object to default state, with no z buffer attached/allocated.
+	 * \brief Creates a new object with default state, no z buffer attached/allocated.
 	 */
-	MaskedOcclusionCulling();
-
+	static MaskedOcclusionCulling *Create();
+	
 	/*!
-	 * \brief Initializes the object to default state, with no z buffer attached/allocated.
+	 * \brief Creates a new object with default state, no z buffer attached/allocated.
 	 * \param memAlloc Pointer to a callback function used when allocating memory 
 	 * \param memFree Pointer to a callback function used when freeing memory 
 	 */
-	MaskedOcclusionCulling(pfnAlignedAlloc memAlloc, pfnAlignedFree memFree);
+	static MaskedOcclusionCulling *Create(pfnAlignedAlloc memAlloc, pfnAlignedFree memFree);
 
 	/*!
-	 * \brief Destroys the object and frees the z buffer memory.
+	 * \brief Destroys an object and frees the z buffer memory. Note that you cannot 
+	 * use the delete operator, and should rather use this function to free up memory.
 	 */
-	~MaskedOcclusionCulling();
+	static void Destroy(MaskedOcclusionCulling *moc);
 
 	/*!
 	 * \brief Sets the resolution of the hierarchical depth buffer. This function will
@@ -195,19 +199,19 @@ public:
 	 * \param witdh The width of the buffer in pixels, must be a multiple of 8
 	 * \param height The height of the buffer in pixels, must be a multiple of 4
 	 */
-	void SetResolution(unsigned int width, unsigned int height);
+	virtual void SetResolution(unsigned int width, unsigned int height) = 0;
 
 	/*!
 	 * \brief Sets the distance for the near clipping plane. Default is nearDist = 0.
 	 *
 	 * \param nearDist The distance to the near clipping plane, given as clip space w
 	 */
-	void SetNearClipPlane(float nearDist);
+	virtual void SetNearClipPlane(float nearDist) = 0;
 
 	/*!
 	 * \brief Clears the hierarchical depth buffer.
 	 */
-	void ClearBuffer();
+	virtual void ClearBuffer() = 0;
 
 	/*! 
 	 * \brief Renders a mesh of occluder triangles and updates the hierarchical z buffer
@@ -238,7 +242,7 @@ public:
 	 * \return Will return VIEW_CULLED if all triangles are either outside the frustum or
 	 *         backface culled, returns VISIBLE otherwise.
 	 */
-	CullingResult RenderTriangles(const float *inVtx, const unsigned int *inTris, int nTris, ClipPlanes clipPlaneMask = CLIP_PLANE_ALL, const ScissorRect *scissor = nullptr, const VertexLayout &vtxLayout = VertexLayout(16, 4, 12));
+	virtual CullingResult RenderTriangles(const float *inVtx, const unsigned int *inTris, int nTris, ClipPlanes clipPlaneMask = CLIP_PLANE_ALL, const ScissorRect *scissor = nullptr, const VertexLayout &vtxLayout = VertexLayout(16, 4, 12)) = 0;
 
 	/*!
 	 * \brief Occlusion query for a rectangle with a given depth. The rectangle is given 
@@ -257,7 +261,7 @@ public:
 	 *         if the rectangle is occluded by a previously rendered  object, or VIEW_CULLED
 	 *         if the rectangle is outside the view frustum.
 	 */
-	CullingResult TestRect(float xmin, float ymin, float xmax, float ymax, float wmin) const;
+	virtual CullingResult TestRect(float xmin, float ymin, float xmax, float ymax, float wmin) const = 0;
 
 	/*!
 	 * \brief This function is similar to RenderTriangles(), but performs an occlusion
@@ -291,7 +295,7 @@ public:
 	 *         if the mesh is occluded by a previously rendered object, or VIEW_CULLED if all
 	 *         triangles are entirely outside the view frustum or backface culled.
 	 */
-	CullingResult TestTriangles(const float *inVtx, const unsigned int *inTris, int nTris, ClipPlanes clipPlaneMask = CLIP_PLANE_ALL, const ScissorRect *scissor = nullptr, const VertexLayout &vtxLayout = VertexLayout(16, 4, 12));
+	virtual CullingResult TestTriangles(const float *inVtx, const unsigned int *inTris, int nTris, ClipPlanes clipPlaneMask = CLIP_PLANE_ALL, const ScissorRect *scissor = nullptr, const VertexLayout &vtxLayout = VertexLayout(16, 4, 12)) = 0;
 
 	/*!
 	 * \brief Creates a per-pixel depth buffer from the hierarchical z buffer representation.
@@ -301,13 +305,18 @@ public:
 	 * \param depthData Pointer to memory where the per-pixel depth data is written. Must
 	 *        hold storage for atleast width*height elements as set by setResolution.
 	 */
-	void ComputePixelDepthBuffer(float *depthData);
+	virtual void ComputePixelDepthBuffer(float *depthData) = 0;
 	
 	/*!
 	 * \brief Fetch occlusion culling statistics, returns zeroes if ENABLE_STATS define is
 	 *        not defined. The statistics can be used for profiling or debugging.
 	 */
-	OcclusionCullingStatistics GetStatistics();
+	virtual OcclusionCullingStatistics GetStatistics() = 0;
+
+	/*!
+	 * \brief Returns the implementation (CPU instruction set) version of this object.
+	 */
+	virtual Implementation GetImplementation() = 0;
 
 	/*!
 	 * \brief Utility function for transforming vertices and outputting them to an (x,y,z,w)
@@ -328,7 +337,11 @@ public:
 	 */
 	static void TransformVertices(const float *mtx, const float *inVtx, float *xfVtx, unsigned int nVtx, const VertexLayout &vtxLayout = VertexLayout(12, 4, 8));
 
-private:
-	MaskedOcclusionCullingPrivate *mPrivate;
+protected:
+	pfnAlignedAlloc mAlignedAllocCallback;
+	pfnAlignedFree  mAlignedFreeCallback;
 
+	mutable OcclusionCullingStatistics mStats;
+
+	virtual ~MaskedOcclusionCulling() {}
 };

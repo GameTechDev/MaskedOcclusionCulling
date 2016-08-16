@@ -1,14 +1,13 @@
 # MaskedOcclusionCulling
 
-This code accompanies the research paper ["Masked Software Occlusion Culling"](http://fileadmin.cs.lth.se/graphics/research/papers/2016/culling/), 
-and implements an efficient alternative to the hierarchical depth buffer algorithm. Our algorithm decouples depth values and coverage, and operates 
-directly on the hierarchical depth buffer. It lets us efficiently parallelize both coverage computations and hierarchical depth buffer updates.
+This code accompanies the research paper ["Masked Software Occlusion Culling"](https://software.intel.com/en-us/articles/masked-software-occlusion-culling),
+and implements an efficient alternative to the hierarchical depth buffer algorithm. Our algorithm decouples depth values and coverage, and operates directly
+on the hierarchical depth buffer. It lets us efficiently parallelize both coverage computations and hierarchical depth buffer updates.
 
 ## Requirements
 
-This code uses AVX2 specific instructions and will only run on AVX2 capable CPUs. Supporting machines with older instruction sets, such as SSE, 
-is therefore *not* just a simple matter of changing the tile size. It may be possible to make an efficient SSE implementation, 
-but we currently have no such plans.
+This code is mainly optimized for the AVX2 instruction set, and some AVX specific instructions are required for best performance. However, we also provide
+SSE 4.1 and SSE 2 implementations for backwards compatibility. The appropriate implementation will be chosen during run-time based on the CPU's capabilities.
 
 ## <a name="cs"></a>Notes on coordinate systems and winding
 
@@ -31,13 +30,19 @@ the API. Please refer to the documentation in the header file for further detail
 
 ### State 
 
-We begin by creating a new instance of the occlusion culling object. The default constructor initializes the object to a default state.
+We begin by creating a new instance of the occlusion culling object. The object is created using the static `Create()` function rather than a standard
+constructor, and can be destroyed using the `Destroy()` function. The reason for using the factory `Create()`/`Destroy()` design pattern is that we want to 
+support custom (aligned) memory allocators, and that the library choses either the AVX or SSE implementation based on the CPU's capabilities.
 
 ```C++
-MaskedOcclusionCulling moc;
+MaskedOcclusionCulling *moc = MaskedOcclusionCulling::Create();
+
+... 
+
+MaskedOcclusionCulling::Destroy(moc);
 ```
 
-The created object is empty has no hierarchical depth buffer attached, so we must first allocate a buffer using the `SetResolution()` function. This function can 
+The created object is empty and has no hierarchical depth buffer attached, so we must first allocate a buffer using the `SetResolution()` function. This function can 
 also be used later to resize the hierarchical depth buffer, causing it to be re-allocated. Note that the resolution width must be a multiple of 8, and the height 
 a multiple of 4. This is a limitation of the occlusion culling algorithm.
 
@@ -77,7 +82,7 @@ such as strips or fans.
 ```C++
 struct ClipSpaceVertex {float x, y, w};
 
-// Create an example triangle . Note that the z component of each vertex is unused
+// Create an example triangle. Note that the z component of each vertex is unused
 ClipspaceVertex triVerts[] = { { 5, 0, 0, 10 }, { 30, 0, 0, 20 }, { 10, 50, 0, 40 } };
 unsigned int triIndices[] = { 0, 1, 2 };
 unsigned int nTris = 1;
@@ -118,18 +123,18 @@ struct VertexLayout
 For example, you can configure a struct of arrays (SoA) layout as follows
 
 ```C++
-// A triangle specified on AoS array of structs (AoS) form
-float AoSVerts[] = {
+// A triangle specified on struct of arrays (SoA) form
+float SoAVerts[] = {
 	 10, 10,   7, // x-coordinates
 	-10, -7, -10, // y-coordinates
 	 10, 10,  10  // w-coordinates
 };
 
 // Set vertex layout (stride, y offset, w offset)
-VertexLayout AoSVertexLayout(sizeof(float), 3 * sizeof(float), 6 * sizeof(float));
+VertexLayout SoAVertexLayout(sizeof(float), 3 * sizeof(float), 6 * sizeof(float));
 
-// Render triangle with AoS layout
-moc.RenderTriangles((float*)AoSVerts, triIndices, 1, CLIP_PLANE_ALL, nullptr, AoSVertexLayout);
+// Render triangle with SoA layout
+moc.RenderTriangles((float*)SoAVerts, triIndices, 1, CLIP_PLANE_ALL, nullptr, SoAVertexLayout);
 ```
 
 Vertex layout may affect occlusion culling performance. We have seen no large performance impact when using either SoA or AoS layout, but generally speaking the 
@@ -186,7 +191,7 @@ moc.ComputePixelDepthBuffer(perPixelZBuffer);
 We also support basic instrumentation to help with profiling and debugging. By defining `ENABLE_STATS` in the header file, the occlusion culling code will 
 gather statistics about the number of occluders rendered and occlusion queries performed. For more details about the statistics, see the 
 `OcclusionCullingStatistics` struct. The statistics can be queried using the `GetStatistics()` function, which will simply return a zeroed struct if `ENABLE_STATS` 
-is not defined. Note that instrumentation reduce performance somewhat and should generally be disabled in release builds.
+is not defined. Note that instrumentation reduces performance somewhat and should generally be disabled in release builds.
 
 ```C++
 OcclusionCullingStatistics stats = moc.GetStatistics();
@@ -195,15 +200,15 @@ OcclusionCullingStatistics stats = moc.GetStatistics();
 
 The implementation contains two update algorithms / heuristics for the hierarchical depth buffer, one focused on speed and one focused on accuracy. The 
 active algorithm can be configured using the `QUICK_MASK` define. Setting the define (default) enables algorithm is described in the research paper 
-["Masked Software Occlusion Culling"](http://fileadmin.cs.lth.se/graphics/research/papers/2016/culling/), which has a good balance between low leakage 
-and good performance. Not defining `QUICK_MASK` enables the mergine heuristic used in the paper ["Masked depth culling for graphics hardware"](http://dl.acm.org/citation.cfm?id=2818138). 
-It is more accurate, with less leakage, but also has lower performance. 
+["Masked Software Occlusion Culling"](https://software.intel.com/en-us/articles/masked-software-occlusion-culling), which has a good balance between low
+leakage and good performance. Not defining `QUICK_MASK` enables the mergine heuristic used in the paper
+["Masked Depth Culling for Graphics Hardware"](http://dl.acm.org/citation.cfm?id=2818138). It is more accurate, with less leakage, but also has lower performance. 
 
 If you experience problems due to leakage you may want to use the more accurate update algorithm. However, rendering order can also affect the quality 
 of the hierarchical depth buffer, with the best order being rendering objects front-to-back. We perform early depth culling tests during occluder 
 rendering, so rendering in front-to-back order will not only improve quality, but also greatly improve performance of occluder rendering. If your scene 
 is stored in a hierarchical data structure, it is often possible to modify the traversal algorithm to traverse nodes in approximate front-to-back order, 
-see the research paper ["Masked Software Occlusion Culling"](http://fileadmin.cs.lth.se/graphics/research/papers/2016/culling/) for an example.
+see the research paper ["Masked Software Occlusion Culling"](https://software.intel.com/en-us/articles/masked-software-occlusion-culling) for an example.
 
 ## Interleaving occluder rendering and occlusion queries
 
@@ -214,13 +219,13 @@ queries.
 This is especially powerful when rendering objects in front-to-back order. After drawing the first few occluder triangles, you can start performing 
 occlusion queries, and if the occlusion query indicate that an object is occluded there is no need to draw the occluder mesh for that object. This 
 can greatly improve the performance of the occlusion culling pass in itself. As described in further detail in the research paper 
-["Masked Software Occlusion Culling"](http://fileadmin.cs.lth.se/graphics/research/papers/2016/culling/), this may be used to perform early exits in 
+["Masked Software Occlusion Culling"](https://software.intel.com/en-us/articles/masked-software-occlusion-culling), this may be used to perform early exits in
 BVH traversal code.
 
 ## Multi-threading and scissoring
 
 We have no plans on making multi-threading a part of the libraray. However, all occluder rendering and occlusion query functions are thread safe except 
-for the hierarchical depth buffer updates. Using a binning (sort middle) rasterizer it one way to ensure that all threads works on a separate part of the 
+for the hierarchical depth buffer updates. Using a binning (sort middle) rasterizer is one way to ensure that all threads works on a separate part of the 
 hierarchical depth buffer, and can be use as a means of multi-threading. As shown in the example below, we expose basic support for binning through a coarse 
 scissor rectangle in the `RenderTriangles()` function. Note that scissoring is meant as a means of multi-threading, and we therefore do not support fine 
 grained scissor rectangles. The x coordinate must be a multiple of 32, and the y coordinate a multiple of 8. The scissor box is given in screen space 
@@ -236,7 +241,7 @@ moc.RenderTriangles(triVerts, triIndices, nTris, CLIP_PLANE_ALL, &scissorRight);
 ```
 ## Memory management
 
-As shown in the example below, you may optionally provide callback functions for allocating and freeing memory when constructing a 
+As shown in the example below, you may optionally provide callback functions for allocating and freeing memory when creating a 
 `MaskedOcclusionCulling` object. The functions must support aligned allocations (at least to 32 byte boundaries). 
 
 ```C++
@@ -250,16 +255,16 @@ void alignedFreeCallback(void *ptr)
 	...
 }
 
-MaskedOcclusionCulling moc(alignedAllocCallback, alignedFreeCallback);
+MaskedOcclusionCulling *moc = MaskedOcclusionCulling::Create(alignedAllocCallback, alignedFreeCallback);
 ```
-
 
 ## Differences to the research paper
 
-This code does not exactly match implementation used in ["Masked Software Occlusion Culling"](http://fileadmin.cs.lth.se/graphics/research/papers/2016/culling/), 
-and performance may vary slightly from what is presented in the research paper. We aimed for making the API as simple as possible and have removed many 
-limitations, in particular requirements on input data being aligned to SIMD boundaries. This affects performance slightly in both directions. Unaligned 
-loads and gathers are more costly, but unaligned data may be packed more efficiently in memory leading to fewer cache misses. 
+This code does not exactly match implementation used in
+["Masked Software Occlusion Culling"](https://software.intel.com/en-us/articles/masked-software-occlusion-culling), and performance may vary slightly 
+from what is presented in the research paper. We aimed for making the API as simple as possible and have removed many limitations, in particular 
+requirements on input data being aligned to SIMD boundaries. This affects performance slightly in both directions. Unaligned loads and
+gathers are more costly, but unaligned data may be packed more efficiently in memory leading to fewer cache misses. 
 
 ## License agreement
 
@@ -289,3 +294,11 @@ CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 
+Disclaimer:
+
+This software is subject to the U.S. Export Administration Regulations and other U.S. 
+law, and may not be exported or re-exported to certain countries (Cuba, Iran, North 
+Korea, Sudan, and Syria) or to persons or entities prohibited from receiving U.S. 
+exports (including Denied Parties, Specially Designated Nationals, and entities on the 
+Bureau of Export Administration Entity List or involved with missile technology or 
+nuclear, chemical or biological weapons).
