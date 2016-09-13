@@ -165,6 +165,9 @@ typedef MaskedOcclusionCulling::VertexLayout    VertexLayout;
 #define SIMD_SUB_TILE_COL_OFFSET_F _mm_setr_ps(0, SUB_TILE_WIDTH, SUB_TILE_WIDTH * 2, SUB_TILE_WIDTH * 3)
 #define SIMD_SUB_TILE_ROW_OFFSET_F _mm_setzero_ps()
 
+#define SIMD_LANE_YCOORD_I _mm_setr_epi32(128, 384, 640, 896)
+#define SIMD_LANE_YCOORD_F _mm_setr_ps(128.0f, 384.0f, 640.0f, 896.0f)
+
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Common SSE2/SSE4.1 functions
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -198,6 +201,7 @@ typedef __m128i __mwi;
 #define _mmw_srai_epi32 _mm_srai_epi32
 #define _mmw_srli_epi32 _mm_srli_epi32
 #define _mmw_slli_epi32 _mm_slli_epi32
+#define _mmw_abs_epi32 _mm_abs_epi32
 
 #define _mmw_cvtps_epi32 _mm_cvtps_epi32
 #define _mmw_cvttps_epi32 _mm_cvttps_epi32
@@ -238,6 +242,14 @@ namespace MaskedOcclusionCullingSSE41
 	static FORCE_INLINE __m128i _mmw_min_epi32(const __m128i &a, const __m128i &b) { return _mm_min_epi32(a, b); }
 	static FORCE_INLINE __m128i _mmw_max_epi32(const __m128i &a, const __m128i &b) { return _mm_max_epi32(a, b); }
 	static FORCE_INLINE __m128 _mmw_blendv_ps(const __m128 &a, const __m128 &b, const __m128 &c) { return _mm_blendv_ps(a, b, c); }
+	static FORCE_INLINE __m128i _mmw_blendv_epi32(const __m128i &a, const __m128i &b, const __m128i &c)
+	{
+		return _mm_castps_si128(_mm_blendv_ps(_mm_castsi128_ps(a), _mm_castsi128_ps(b), _mm_castsi128_ps(c)));
+	}
+	static FORCE_INLINE __m128i _mmw_blendv_epi32(const __m128i &a, const __m128i &b, const __m128 &c)
+	{
+		return _mm_castps_si128(_mm_blendv_ps(_mm_castsi128_ps(a), _mm_castsi128_ps(b), c));
+	}
 	static FORCE_INLINE int _mmw_testz_epi32(const __m128i &a, const __m128i &b) { return _mm_testz_si128(a, b); }
 	static FORCE_INLINE __m128 _mmx_dp4_ps(const __m128 &a, const __m128 &b) { return _mm_dp_ps(a, b, 0xFF); }
 	static FORCE_INLINE __m128 _mmw_floor_ps(const __m128 &a) { return _mm_round_ps(a, _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC); }
@@ -315,6 +327,14 @@ namespace MaskedOcclusionCullingSSE2
 		__m128 cond = _mm_castsi128_ps(_mm_srai_epi32(_mm_castps_si128(c), 31));
 		return _mm_or_ps(_mm_andnot_ps(cond, a), _mm_and_ps(cond, b));
 	}
+	static FORCE_INLINE __m128i _mmw_blendv_epi32(const __m128i &a, const __m128i &b, const __m128i &c)
+	{
+		return _mm_castps_si128(_mmw_blendv_ps(_mm_castsi128_ps(a), _mm_castsi128_ps(b), _mm_castsi128_ps(c)));
+	}
+	static FORCE_INLINE __m128i _mmw_blendv_epi32(const __m128i &a, const __m128i &b, const __m128 &c)
+	{
+		return _mm_castps_si128(_mmw_blendv_ps(_mm_castsi128_ps(a), _mm_castsi128_ps(b), c));
+	}
 	static FORCE_INLINE __m128 _mmx_dp4_ps(const __m128 &a, const __m128 &b)
 	{ 
 		// Product and two shuffle/adds pairs (similar to hadd_ps)
@@ -350,7 +370,7 @@ namespace MaskedOcclusionCullingSSE2
 	}
 	static FORCE_INLINE __m128i _mmw_sllv_ones(const __m128i &ishift)
 	{
-		__m128i shift = _mm_min_epi32(ishift, _mm_set1_epi32(32));
+		__m128i shift = _mmw_min_epi32(ishift, _mm_set1_epi32(32));
 		
 		// Uses scalar approach to perform _mm_sllv_epi32(~0, shift)
 		static const unsigned int maskLUT[33] = {

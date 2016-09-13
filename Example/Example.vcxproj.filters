@@ -2,13 +2,32 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClCompile Include="ExampleMain.cpp" />
-    <ClCompile Include="..\MaskedOcclusionCulling.cpp" />
-    <ClCompile Include="..\MaskedOcclusionCullingAVX2.cpp" />
+    <ClCompile Include="..\CullingThreadpool.cpp">
+      <Filter>MaskedOcclusionCullingLibrary</Filter>
+    </ClCompile>
+    <ClCompile Include="..\MaskedOcclusionCulling.cpp">
+      <Filter>MaskedOcclusionCullingLibrary</Filter>
+    </ClCompile>
+    <ClCompile Include="..\MaskedOcclusionCullingAVX2.cpp">
+      <Filter>MaskedOcclusionCullingLibrary</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\MaskedOcclusionCulling.h" />
+    <ClInclude Include="..\CullingThreadpool.h">
+      <Filter>MaskedOcclusionCullingLibrary</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MaskedOcclusionCulling.h">
+      <Filter>MaskedOcclusionCullingLibrary</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\MaskedOcclusionCullingCommon.inl" />
+    <Filter Include="MaskedOcclusionCullingLibrary">
+      <UniqueIdentifier>{e1b85872-c29a-4dd3-b9db-e4ff2dedded9}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\MaskedOcclusionCullingCommon.inl">
+      <Filter>MaskedOcclusionCullingLibrary</Filter>
+    </None>
   </ItemGroup>
 </Project>

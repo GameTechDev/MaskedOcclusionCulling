@@ -26,14 +26,9 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #define _USE_MATH_DEFINES
-#include <float.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <intrin.h>
-#include <math.h>
 #include <algorithm>
-#include <vector>
-#include <chrono>
 
 #include "../MaskedOcclusionCulling.h"
 
@@ -93,9 +88,9 @@ int main(int argc, char* argv[])
 
 	MaskedOcclusionCulling::Implementation implementation = moc->GetImplementation();
 	switch (implementation) {
-		case MaskedOcclusionCulling::SSE2: printf("Using SSE2 version\n"); break;
-		case MaskedOcclusionCulling::SSE41: printf("Using SSE41 version\n"); break;
-		case MaskedOcclusionCulling::AVX2: printf("Using AVX2 version\n"); break;
+	case MaskedOcclusionCulling::SSE2: printf("Using SSE2 version\n"); break;
+	case MaskedOcclusionCulling::SSE41: printf("Using SSE41 version\n"); break;
+	case MaskedOcclusionCulling::AVX2: printf("Using AVX2 version\n"); break;
 	}
 
 	////////////////////////////////////////////////////////////////////////////////////////
@@ -128,7 +123,7 @@ int main(int argc, char* argv[])
 
 	// Render the quad. As an optimization, indicate that clipping is not required as it is 
 	// completely inside the view frustum
-	moc->RenderTriangles((float*)quadVerts, quadIndices, 2, MaskedOcclusionCulling::CLIP_PLANE_NONE);
+	moc->RenderTriangles((float*)quadVerts, quadIndices, 2, nullptr, MaskedOcclusionCulling::CLIP_PLANE_NONE);
 
 	// A triangle specified on struct of arrays (SoA) form
 	float SoAVerts[] = {
@@ -141,7 +136,7 @@ int main(int argc, char* argv[])
 	MaskedOcclusionCulling::VertexLayout SoAVertexLayout(sizeof(float), 3 * sizeof(float), 6 * sizeof(float));
 
 	// Render triangle with SoA layout
-	moc->RenderTriangles((float*)SoAVerts, triIndices, 1, MaskedOcclusionCulling::CLIP_PLANE_ALL, nullptr, SoAVertexLayout);
+	moc->RenderTriangles((float*)SoAVerts, triIndices, 1, nullptr, MaskedOcclusionCulling::CLIP_PLANE_ALL, nullptr, SoAVertexLayout);
 
 
 	////////////////////////////////////////////////////////////////////////////////////////
@@ -184,121 +179,9 @@ int main(int argc, char* argv[])
 	unsigned char *image = new unsigned char[width * height * 3];
 	TonemapDepth(perPixelZBuffer, image, width, height);
 	WriteBMP("image.bmp", image, width, height);
-	delete [] image;
+	delete[] image;
 
 	// Destroy occlusion culling object and free hierarchical z-buffer
 	MaskedOcclusionCulling::Destroy(moc);
-
-#ifndef _DEBUG
-	// In release builds, run a simple rasterizer/fillrate benchmark
-	void Benchmark();
-	Benchmark();
-#endif
-}
-
-////////////////////////////////////////////////////////////////////////////////////////
-// Simple random triangle rasterizer benchmark
-////////////////////////////////////////////////////////////////////////////////////////
-
-inline float frand() { return (float)rand() / (float)RAND_MAX; }
-
-void GenerateRandomTriangles(float *verts, unsigned int *triIdx, int nTris, int size, float width, float height)
-{
-	for (int idx = 0; idx < nTris; ++idx)
-	{
-		triIdx[idx * 3 + 0] = idx * 3 + 0;
-		triIdx[idx * 3 + 1] = idx * 3 + 1;
-		triIdx[idx * 3 + 2] = idx * 3 + 2;
-
-		while (true)
-		{
-			float vtx[3][3] = { { 0, 0, 1 },{ size * 2 / (float)width, 0, 1 },{ 0, size * 2 / (float)height, 1 } };
-			float offset[3] = { frand()*2.0f - 1.0f, frand()*2.0f - 1.0f, 0 };
-			float rotation = frand() * 2 * (float)M_PI;
-
-			float myz = (float)(nTris - idx);
-			bool triOk = true;
-			float rvtx[3][3];
-			for (int i = 0; i < 3; ++i)
-			{
-				rvtx[i][0] = cos(rotation)*vtx[i][0] - sin(rotation)*vtx[i][1] + offset[0];
-				rvtx[i][1] = sin(rotation)*vtx[i][0] + cos(rotation)*vtx[i][1] + offset[1];
-				rvtx[i][2] = 1;
-
-				if (rvtx[i][0] < -1.0f || rvtx[i][0] > 1.0f || rvtx[i][1] < -1.0f || rvtx[i][1] > 1.0f)
-					triOk = false;
-
-				int vtxIdx = idx * 3 + i;
-				verts[vtxIdx * 4 + 0] = rvtx[i][0] * myz;
-				verts[vtxIdx * 4 + 1] = rvtx[i][1] * myz;
-				verts[vtxIdx * 4 + 2] = 0.0f;
-				verts[vtxIdx * 4 + 3] = rvtx[i][2] * myz;
-			}
-			if (triOk)
-				break;
-		}
-	}
-}
-
-double BenchmarkTriangles(float *verts, unsigned int *tris, int numTriangles, MaskedOcclusionCulling *moc)
-{
-	moc->ClearBuffer();
-	auto before = std::chrono::high_resolution_clock::now();
-	moc->RenderTriangles(verts, tris, numTriangles, MaskedOcclusionCulling::CLIP_PLANE_NONE);
-	auto after = std::chrono::high_resolution_clock::now();
-	return std::chrono::duration<double>(after - before).count();
-}
-
-void Benchmark()
-{
-	// Flush denorms to zero to avoid performance issues with small values
-	_mm_setcsr(_mm_getcsr() | 0x8040);
-
-	MaskedOcclusionCulling *moc = MaskedOcclusionCulling::Create();
-
-	////////////////////////////////////////////////////////////////////////////////////////
-	// Setup and state related code
-	////////////////////////////////////////////////////////////////////////////////////////
-
-	// Setup a 1024 x 1024 rendertarget with near clip plane at w = 1.0
-	const int width = 1024, height = 1024;
-	moc->SetResolution(width, height);
-	moc->SetNearClipPlane(1.0f);
-
-	////////////////////////////////////////////////////////////////////////////////////////
-	// Create randomized triangles for back-to-front and front-to-back rendering
-	////////////////////////////////////////////////////////////////////////////////////////
-
-	const int numTriangles = 1000 * 256;
-	const int sizes[] = { 10, 20, 30, 40, 50, 75, 100, 200, 300, 400, 500 };
-	int numSizes = sizeof(sizes) / sizeof(int);
-
-	printf("Generating randomized triangles");
-	std::vector<unsigned int *> trisBtF, trisFtB;
-	std::vector<float *>		verts;
-	for (int i = 0; i < numSizes; ++i)
-	{
-		float *pVerts = new float[numTriangles * 4 * 3];
-		unsigned int *pTris = new unsigned int[numTriangles * 3];
-		GenerateRandomTriangles(pVerts, pTris, numTriangles, sizes[i], 1024.0f, 1024.0f);
-		verts.push_back(pVerts);
-		trisBtF.push_back(pTris);
-		printf(".");
-	}
-
-	////////////////////////////////////////////////////////////////////////////////////////
-	// Perform benchmarks
-	////////////////////////////////////////////////////////////////////////////////////////
-
-	printf("\n\nSingle threaded back-to-front rendering (%d kTris)\n", numTriangles / 1000);
-	printf("----\n");
-	for (int i = 0; i < numSizes; ++i)
-	{
-		int size = sizes[i];
-		double t = BenchmarkTriangles(verts[i], trisBtF[i], numTriangles, moc);
-		double GPixelsPerSecond = (double)numTriangles*size*size / (2.0 * 1e9 * t);
-		double MTrisPerSecond = (double)numTriangles / (1e6 * t);
-		printf("Tri: %3dx%3d - Time: %7.2f ms, MTris/s: %5.2f, GPixels/s: %5.2f \n", size, size, t * 1000.0f, MTrisPerSecond, GPixelsPerSecond);
-	}
 
 }

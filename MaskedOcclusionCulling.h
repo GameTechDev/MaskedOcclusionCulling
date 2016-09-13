@@ -50,19 +50,46 @@
 // Defines used to configure the implementation
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#ifndef QUICK_MASK
 /*!
  * Configure the algorithm used for updating and merging hierarchical z buffer entries. If QUICK_MASK
  * is defined to 1, use the algorithm from the paper "Masked Software Occlusion Culling", which has good
  * balance between performance and low leakage. If QUICK_MASK is defined to 0, use the algorithm from
  * "Masked Depth Culling for Graphics Hardware" which has less leakage, but also lower performance.
  */
-#define QUICK_MASK		1
+#define QUICK_MASK			1
 
+#endif
+
+#ifndef USE_D3D
+/*!
+ * Configures the library for use with Direct3D (default) or OpenGL rendering. This changes whether the 
+ * screen space Y axis points downwards (D3D) or upwards (OGL), and is primarily important in combination 
+ * with the PRECISE_COVERAGE define, where this is important to ensure correct rounding and tie-breaker
+ * behaviour. It also affects the ScissorRect screen space coordinates and the memory layout of the buffer 
+ * returned by ComputePixelDepthBuffer().
+ */
+#define USE_D3D				1
+
+#endif
+
+#ifndef PRECISE_COVERAGE
+/*!
+ * Define PRECISE_COVERAGE to 1 to more closely match GPU rasterization rules. The increased precision comes
+ * at a cost of slightly lower performance.
+ */
+#define PRECISE_COVERAGE	0
+
+#endif
+
+#ifndef ENABLE_STATS
 /*!
  * Define ENABLE_STATS to 1 to gather various statistics during occlusion culling. Can be used for profiling 
  * and debugging. Note that enabling this function will reduce performance significantly.
  */
-#define ENABLE_STATS	0
+#define ENABLE_STATS		0
+
+#endif
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Masked occlusion culling class
@@ -150,6 +177,16 @@ public:
 		int mMaxY;	//!< Screen space Y coordinate for top side of scissor rect, <B>non</B> inclusive and must be a multiple of 8
 	};
 
+	/*!
+	 * Used to specify storage area for a binlist, containing triangles. This struct is used for binning 
+	 * and multithreading. The host application is responsible for allocating memory for the binlists.
+	 */
+	struct TriList
+	{
+		unsigned int mNumTriangles; //!< Maximum number of triangles that may be stored in mPtr
+		unsigned int mTriIdx;       //!< Index of next triangle to be written, clear before calling BinTriangles to start from the beginning of the list
+		float		 *mPtr;         //!< Scratchpad buffer allocated by the host application
+	};
 	struct OcclusionCullingStatistics
 	{
 		struct
@@ -202,11 +239,24 @@ public:
 	virtual void SetResolution(unsigned int width, unsigned int height) = 0;
 
 	/*!
+	* \brief Gets the resolution of the hierarchical depth buffer. 
+	*
+	* \param witdh Output: The width of the buffer in pixels
+	* \param height Output: The height of the buffer in pixels
+	*/
+	virtual void GetResolution(unsigned int &width, unsigned int &height) = 0;
+
+	/*!
 	 * \brief Sets the distance for the near clipping plane. Default is nearDist = 0.
 	 *
 	 * \param nearDist The distance to the near clipping plane, given as clip space w
 	 */
 	virtual void SetNearClipPlane(float nearDist) = 0;
+
+	/*!
+	* \brief Gets the distance for the near clipping plane. 
+	*/
+	virtual float GetNearClipPlane() = 0;
 
 	/*!
 	 * \brief Clears the hierarchical depth buffer.
@@ -223,10 +273,12 @@ public:
 	 * \param inVtx Pointer to an array of input vertices, should point to the x component
 	 *        of the first vertex. The input vertices are given as (x,y,w) cooordinates
 	 *        in clip space. The memory layout can be changed using vtxLayout.
-	 * \param inTris Pointer to an arrray of triangle indices. Each triangle is created 
+	 * \param inTris Pointer to an arrray of vertex indices. Each triangle is created 
 	 *        from three indices consecutively fetched from the array.
 	 * \param nTris The number of triangles to render (inTris must contain atleast 3*nTris
 	 *        entries)
+	 * \param modelToClipMatrix all vertices will be transformed by this matrix before
+	 *        performing projection. If nullptr is passed the transform step will be skipped
 	 * \param clipPlaneMask A mask indicating which clip planes should be considered by the
 	 *        triangle clipper. Can be used as an optimization if your application can 
 	 *        determine (for example during culling) that a group of triangles does not 
@@ -242,7 +294,7 @@ public:
 	 * \return Will return VIEW_CULLED if all triangles are either outside the frustum or
 	 *         backface culled, returns VISIBLE otherwise.
 	 */
-	virtual CullingResult RenderTriangles(const float *inVtx, const unsigned int *inTris, int nTris, ClipPlanes clipPlaneMask = CLIP_PLANE_ALL, const ScissorRect *scissor = nullptr, const VertexLayout &vtxLayout = VertexLayout(16, 4, 12)) = 0;
+	virtual CullingResult RenderTriangles(const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix = nullptr, ClipPlanes clipPlaneMask = CLIP_PLANE_ALL, const ScissorRect *scissor = nullptr, const VertexLayout &vtxLayout = VertexLayout(16, 4, 12)) = 0;
 
 	/*!
 	 * \brief Occlusion query for a rectangle with a given depth. The rectangle is given 
@@ -279,6 +331,8 @@ public:
 	 *        from three indices consecutively fetched from the array.
 	 * \param nTris The number of triangles to render (inTris must contain atleast 3*nTris
 	 *        entries)
+	 * \param modelToClipMatrix all vertices will be transformed by this matrix before
+	 *        performing projection. If nullptr is passed the transform step will be skipped
 	 * \param clipPlaneMask A mask indicating which clip planes should be considered by the
 	 *        triangle clipper. Can be used as an optimization if your application can
 	 *        determine (for example during culling) that a group of triangles does not
@@ -295,12 +349,66 @@ public:
 	 *         if the mesh is occluded by a previously rendered object, or VIEW_CULLED if all
 	 *         triangles are entirely outside the view frustum or backface culled.
 	 */
-	virtual CullingResult TestTriangles(const float *inVtx, const unsigned int *inTris, int nTris, ClipPlanes clipPlaneMask = CLIP_PLANE_ALL, const ScissorRect *scissor = nullptr, const VertexLayout &vtxLayout = VertexLayout(16, 4, 12)) = 0;
+	virtual CullingResult TestTriangles(const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix = nullptr, ClipPlanes clipPlaneMask = CLIP_PLANE_ALL, const ScissorRect *scissor = nullptr, const VertexLayout &vtxLayout = VertexLayout(16, 4, 12)) = 0;
+
+	/*!
+	 * \brief Perform input assembly, clipping , projection, triangle setup, and write
+	 *        triangles to the screen space bins they overlap. This function can be used to
+	 *        distribute work for threading (See the CullingThreadpool class for an example)
+	 *
+	 * \param inVtx Pointer to an array of input vertices, should point to the x component
+	 *        of the first vertex. The input vertices are given as (x,y,w) cooordinates
+	 *        in clip space. The memory layout can be changed using vtxLayout.
+	 * \param inTris Pointer to an arrray of vertex indices. Each triangle is created
+	 *        from three indices consecutively fetched from the array.
+	 * \param nTris The number of triangles to render (inTris must contain atleast 3*nTris
+	 *        entries)
+	 * \param triLists Pointer to an array of TriList objects with one TriList object per
+	 *        bin. If a triangle overlaps a bin, it will be written to the corresponding
+	 *        trilist. Note that this method appends the triangles to the current list, to
+	 *        start writing from the beginning of the list, set triList.mTriIdx = 0
+	 * \param nBinsW Number of vertical bins, the screen is divided into nBinsW x nBinsH
+	 *        rectangular bins.
+	 * \param nBinsH Number of horizontal bins, the screen is divided into nBinsW x nBinsH
+	 *        rectangular bins.
+	 * \param modelToClipMatrix all vertices will be transformed by this matrix before
+	 *        performing projection. If nullptr is passed the transform step will be skipped
+	 * \param clipPlaneMask A mask indicating which clip planes should be considered by the
+	 *        triangle clipper. Can be used as an optimization if your application can
+	 *        determine (for example during culling) that a group of triangles does not
+	 *        intersect a certein frustum plane. However, setting an incorrect mask may
+	 *        cause out of bounds memory accesses.
+	 * \param vtxLayout A struct specifying the vertex layout (see struct for detailed
+	 *        description). For best performance, it is advicable to store position data
+	 *        as compactly in memory as possible.
+	 */
+	virtual void BinTriangles(const float *inVtx, const unsigned int *inTris, int nTris, TriList *triLists, unsigned int nBinsW, unsigned int nBinsH, const float *modelToClipMatrix = nullptr, ClipPlanes clipPlaneMask = CLIP_PLANE_ALL, const VertexLayout &vtxLayout = VertexLayout(16, 4, 12)) = 0;
+
+	/*!
+	 * \brief Renders all occluder triangles in a trilist. This function can be used in
+	 *        combination with BinTriangles() to create a threded (binning) rasterizer. The
+	 *        bins can be processed independently by different threads without risking writing
+	 *        to overlapping memory regions.
+	 *
+	 * \param triLists A triangle list, filled using the BinTriangles() function that is to
+	 *        be rendered.
+	 * \param scissor A scissor box limiting the rendering region to the bin. The size of each
+	 *        bin must be a multiple of 32x8 pixels due to implementation constrants. For a
+	 *        render target with (width, height) resolution and (nBinsW, nBinsH) bins, the
+	 *        size of a bin is:
+	 *          binWidth = (width / nBinsW) - (width / nBinsW) % 32;
+	 *          binHeight = (height / nBinsH) - (height / nBinsH) % 8;
+	 *        The last row and column of tiles have a different size:
+	 *          lastColBinWidth = width - (nBinsW-1)*binWidth;
+	 *          lastRowBinHeight = height - (nBinsH-1)*binHeight;
+	 */
+	virtual void RenderTrilist(const TriList &triList, const ScissorRect *scissor) = 0;
 
 	/*!
 	 * \brief Creates a per-pixel depth buffer from the hierarchical z buffer representation.
 	 *        Intended for visualizing the hierarchical depth buffer for debugging. The 
-	 *        buffer is written in scanline order, from the bottom to the top of the surface.
+	 *        buffer is written in scanline order, from the top to bottom (D3D) or bottom to 
+	 *        top (OGL) of the surface. See the USE_D3D define.
 	 *
 	 * \param depthData Pointer to memory where the per-pixel depth data is written. Must
 	 *        hold storage for atleast width*height elements as set by setResolution.

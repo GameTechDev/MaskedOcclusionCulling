@@ -70,6 +70,9 @@
 
 #define SIMD_SHUFFLE_SCANLINE_TO_SUBTILES _mm256_setr_epi8( 0x0, 0x4, 0x8, 0xC,	0x1, 0x5, 0x9, 0xD,	0x2, 0x6, 0xA, 0xE,	0x3, 0x7, 0xB, 0xF,	0x0, 0x4, 0x8, 0xC,	0x1, 0x5, 0x9, 0xD,	0x2, 0x6, 0xA, 0xE,	0x3, 0x7, 0xB, 0xF)
 
+#define SIMD_LANE_YCOORD_I _mm256_setr_epi32(128, 384, 640, 896, 1152, 1408, 1664, 1920)
+#define SIMD_LANE_YCOORD_F _mm256_setr_ps(128.0f, 384.0f, 640.0f, 896.0f, 1152.0f, 1408.0f, 1664.0f, 1920.0f)
+
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // AVX specific typedefs and functions
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -112,6 +115,7 @@ typedef __m256i __mwi;
 #define _mmw_slli_epi32 _mm256_slli_epi32
 #define _mmw_sllv_ones(x) _mm256_sllv_epi32(SIMD_BITS_ONE, x)
 #define _mmw_transpose_epi8(x) _mm256_shuffle_epi8(x, SIMD_SHUFFLE_SCANLINE_TO_SUBTILES)
+#define _mmw_abs_epi32 _mm256_abs_epi32
 
 #define _mmw_cvtps_epi32 _mm256_cvtps_epi32
 #define _mmw_cvttps_epi32 _mm256_cvttps_epi32
@@ -167,6 +171,14 @@ static FORCE_INLINE void GatherVertices(__m256 *vtxX, __m256 *vtxY, __m256 *vtxW
 
 namespace MaskedOcclusionCullingAVX2
 {
+	static FORCE_INLINE __m256i _mmw_blendv_epi32(const __m256i &a, const __m256i &b, const __m256i &c) 
+	{
+		return _mm256_castps_si256(_mm256_blendv_ps(_mm256_castsi256_ps(a), _mm256_castsi256_ps(b), _mm256_castsi256_ps(c)));
+	}
+	static FORCE_INLINE __m256i _mmw_blendv_epi32(const __m256i &a, const __m256i &b, const __m256 &c) 
+	{
+		return _mm256_castps_si256(_mm256_blendv_ps(_mm256_castsi256_ps(a), _mm256_castsi256_ps(b), c));
+	}
 
 	static MaskedOcclusionCulling::Implementation gInstructionSet = MaskedOcclusionCulling::AVX2;
 
