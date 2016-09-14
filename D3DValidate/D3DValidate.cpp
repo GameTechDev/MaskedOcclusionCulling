@@ -252,7 +252,7 @@ bool D3DValidateTriangle(float *verts, MaskedOcclusionCulling *moc)
 		}
 	}
 
-	delete depthBuffer;
+	delete[] depthBuffer;
 	delete[] d3dimg;
 
 	return identical;
