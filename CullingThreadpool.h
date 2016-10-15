@@ -101,7 +101,6 @@ protected:
 
 		volatile unsigned int	mWritePtr;
 		std::atomic_uint		mBinningPtr;
-		std::atomic_uint		mBinningCompletedPtr;
 		std::atomic_uint		*mRenderPtrs;
 		std::atomic_uint		*mBinMutexes;
 
@@ -117,7 +116,6 @@ protected:
 
 		bool CanWrite() const;
 		bool CanBin() const;
-		bool CanRender(int binIdx) const;
 
 		Job *GetWriteJob();
 		void AdvanceWriteJob();
