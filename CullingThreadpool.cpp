@@ -360,8 +360,8 @@ CullingThreadpool::~CullingThreadpool()
 	// Wait for threads to terminate
 	if (mThreads != nullptr || !mKillThreads)
 	{
-		mKillThreads = true;
 		WakeThreads();
+		mKillThreads = true;
 		for (unsigned int i = 0; i < mNumThreads; ++i)
 			mThreads[i].join();
 
