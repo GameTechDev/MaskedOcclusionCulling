@@ -142,17 +142,12 @@ inline bool CullingThreadpool::RenderJobQueue::IsPipelineEmpty() const
 
 inline bool CullingThreadpool::RenderJobQueue::CanWrite() const
 {
-	return mWritePtr - mBinningCompletedPtr < mMaxJobs;
+	return mWritePtr - GetMinRenderPtr() < mMaxJobs;
 }
 
 inline bool CullingThreadpool::RenderJobQueue::CanBin() const
 {
 	return mBinningPtr < mWritePtr && mBinningPtr - GetMinRenderPtr() < mMaxJobs;
-}
-
-inline bool CullingThreadpool::RenderJobQueue::CanRender(int binIdx) const
-{
-	return mRenderPtrs[binIdx] < mBinningCompletedPtr;
 }
 
 inline CullingThreadpool::RenderJobQueue::Job *CullingThreadpool::RenderJobQueue::GetWriteJob()
@@ -181,14 +176,7 @@ inline CullingThreadpool::RenderJobQueue::Job *CullingThreadpool::RenderJobQueue
 
 inline void CullingThreadpool::RenderJobQueue::FinishedBinningJob(Job *job)
 {
-	// Increment pointer until all finished jobs are accounted for
 	job->mBinningJobCompletedIdx = job->mBinningJobStartedIdx;
-	unsigned int completedPtr = mBinningCompletedPtr;
-	while (completedPtr < mBinningPtr && mJobs[completedPtr % mMaxJobs].mBinningJobCompletedIdx == completedPtr)
-	{
-		mBinningCompletedPtr.compare_exchange_strong(completedPtr, completedPtr + 1);
-		completedPtr = mBinningCompletedPtr;
-	}
 }
 
 inline CullingThreadpool::RenderJobQueue::Job *CullingThreadpool::RenderJobQueue::GetRenderJob(int binIdx)
@@ -199,7 +187,7 @@ inline CullingThreadpool::RenderJobQueue::Job *CullingThreadpool::RenderJobQueue
 		return nullptr;
 
 	// Check any items in the queue, and bail if empty
-	if (mRenderPtrs[binIdx] >= mBinningCompletedPtr.load())
+	if (mRenderPtrs[binIdx] != mJobs[mRenderPtrs[binIdx] % mMaxJobs].mBinningJobCompletedIdx)
 	{
 		mBinMutexes[binIdx] = 0;
 		return nullptr;
@@ -211,7 +199,6 @@ inline CullingThreadpool::RenderJobQueue::Job *CullingThreadpool::RenderJobQueue
 void CullingThreadpool::RenderJobQueue::Reset()
 {
 	mWritePtr = 0;
-	mBinningCompletedPtr = 0;
 	mBinningPtr = 0;
 
 	for (unsigned int i = 0; i < mNumBins; ++i)
@@ -373,8 +360,8 @@ CullingThreadpool::~CullingThreadpool()
 	// Wait for threads to terminate
 	if (mThreads != nullptr || !mKillThreads)
 	{
-		mKillThreads = true;
 		WakeThreads();
+		mKillThreads = true;
 		for (unsigned int i = 0; i < mNumThreads; ++i)
 			mThreads[i].join();
 
