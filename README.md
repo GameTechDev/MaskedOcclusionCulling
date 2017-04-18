@@ -382,7 +382,7 @@ gathers are more costly, but unaligned data may be packed more efficiently in me
 
 ## License agreement
 
-See License.htm for full license agreement details.
+See the Apache 2.0 license.txt for full license agreement details.
 
 Disclaimer:
 
