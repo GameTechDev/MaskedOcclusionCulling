@@ -207,12 +207,9 @@ void CullingThreadpool::SetupScissors()
 	unsigned int width, height;
 	mMOC->GetResolution(width, height);
 
-	// Scissor box of masked occlusion culling library must be a multiple of 32x8 
-	const unsigned int BIN_WIDTH_CLAMP = 32;
-	const unsigned int BIN_HEIGHT_CLAMP = 8;
-
-	unsigned int binWidth = (width / mBinsW) - ((width / mBinsW) % BIN_WIDTH_CLAMP);
-	unsigned int binHeight = (height / mBinsH) - ((height / mBinsH) % BIN_HEIGHT_CLAMP);
+    unsigned int binWidth;
+    unsigned int binHeight;
+    mMOC->ComputeBinWidthHeight( mBinsW, mBinsH, binWidth, binHeight );
 
 	for (unsigned int ty = 0; ty < mBinsH; ++ty)
 	{

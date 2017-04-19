@@ -251,7 +251,13 @@ public:
 		height = mHeight;
 	}
 
-	void SetNearClipPlane(float nearDist) override
+    void ComputeBinWidthHeight( unsigned int nBinsW, unsigned int nBinsH, unsigned int & outBinWidth, unsigned int & outBinHeight ) override
+    {
+        outBinWidth = (mWidth / nBinsW) - ((mWidth / nBinsW) % TILE_WIDTH);
+        outBinHeight = (mHeight / nBinsH) - ((mHeight / nBinsH) % TILE_HEIGHT);
+    }
+
+    void SetNearClipPlane(float nearDist) override
 	{
 		// Setup the near frustum plane
 		mNearDist = nearDist;
@@ -1656,8 +1662,9 @@ public:
 			// Bin triangles
 			//////////////////////////////////////////////////////////////////////////////
 
-			unsigned int binWidth = (mWidth / nBinsW) - ((mWidth / nBinsW) % TILE_WIDTH);
-			unsigned int binHeight = (mHeight / nBinsH) - ((mHeight / nBinsH) % TILE_HEIGHT);
+			unsigned int binWidth;
+			unsigned int binHeight;
+            ComputeBinWidthHeight( nBinsW, nBinsH, binWidth, binHeight );
 
 			// Compute pixel bounding box
 			__mwi bbPixelMinX, bbPixelMinY, bbPixelMaxX, bbPixelMaxY;

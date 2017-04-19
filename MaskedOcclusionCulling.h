@@ -234,6 +234,20 @@ public:
 	virtual void GetResolution(unsigned int &width, unsigned int &height) = 0;
 
 	/*!
+	 * \brief Returns the tile size for the current implementation.
+     *
+     * \param nBinsW Number of vertical bins, the screen is divided into nBinsW x nBinsH
+     *        rectangular bins.
+     * \param nBinsH Number of horizontal bins, the screen is divided into nBinsW x nBinsH
+     *        rectangular bins.
+     * \param outBinWidth Output: The width of the single bin in pixels (except for the 
+     *        rightmost bin width, which is extended to resolution width)
+     * \param outBinHeight Output: The height of the single bin in pixels (except for the 
+     *        bottommost bin height, which is extended to resolution height)
+	 */
+    virtual void ComputeBinWidthHeight( unsigned int nBinsW, unsigned int nBinsH, unsigned int & outBinWidth, unsigned int & outBinHeight ) = 0;
+
+    /*!
 	 * \brief Sets the distance for the near clipping plane. Default is nearDist = 0.
 	 *
 	 * \param nearDist The distance to the near clipping plane, given as clip space w
