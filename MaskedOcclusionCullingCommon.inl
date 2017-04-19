@@ -1667,9 +1667,9 @@ public:
 			{
 				unsigned int triIdx = find_clear_lsb(&triMask);
 
-				// Clamp bounding box to bins
-				int startX = min(nBinsW, bbPixelMinX.mw_i32[triIdx] / binWidth);
-				int startY = min(nBinsH, bbPixelMinY.mw_i32[triIdx] / binHeight);
+                // Clamp bounding box to bins
+				int startX = min(nBinsW-1, bbPixelMinX.mw_i32[triIdx] / binWidth);
+				int startY = min(nBinsH-1, bbPixelMinY.mw_i32[triIdx] / binHeight);
 				int endX = min(nBinsW, (bbPixelMaxX.mw_i32[triIdx] + binWidth - 1) / binWidth);
 				int endY = min(nBinsH, (bbPixelMaxY.mw_i32[triIdx] + binHeight - 1) / binHeight);
 
