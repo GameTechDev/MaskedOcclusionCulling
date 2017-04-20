@@ -207,9 +207,9 @@ void CullingThreadpool::SetupScissors()
 	unsigned int width, height;
 	mMOC->GetResolution(width, height);
 
-    unsigned int binWidth;
-    unsigned int binHeight;
-    mMOC->ComputeBinWidthHeight( mBinsW, mBinsH, binWidth, binHeight );
+	unsigned int binWidth;
+	unsigned int binHeight;
+	mMOC->ComputeBinWidthHeight( mBinsW, mBinsH, binWidth, binHeight );
 
 	for (unsigned int ty = 0; ty < mBinsH; ++ty)
 	{

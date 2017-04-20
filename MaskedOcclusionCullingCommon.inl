@@ -179,6 +179,7 @@ public:
 		mAlignedAllocCallback = memAlloc;
 		mAlignedFreeCallback = memFree;
 
+		SetNearClipPlane( 0.0f );
 		mCSFrustumPlanes[0] = _mm_setr_ps(0.0f, 0.0f, 1.0f, 0.0f);
 		mCSFrustumPlanes[1] = _mm_setr_ps(1.0f, 0.0f, 1.0f, 0.0f);
 		mCSFrustumPlanes[2] = _mm_setr_ps(-1.0f, 0.0f, 1.0f, 0.0f);
@@ -186,6 +187,8 @@ public:
 		mCSFrustumPlanes[4] = _mm_setr_ps(0.0f, -1.0f, 1.0f, 0.0f);
 
 		memset(&mStats, 0, sizeof(OcclusionCullingStatistics));
+
+		SetResolution( 0, 0 );
 	}
 
 	~MaskedOcclusionCullingPrivate() override
@@ -241,8 +244,9 @@ public:
 		mCSFrustumPlanes[3] = _mm_setr_ps(0.0f, 1.0f - guardBandHeight, 1.0f, 0.0f);
 		mCSFrustumPlanes[4] = _mm_setr_ps(0.0f, -1.0f + guardBandHeight, 1.0f, 0.0f);
 
-		// Allocate masked hierarchical Z buffer 
-		mMaskedHiZBuffer = (ZTile *)mAlignedAllocCallback(32, sizeof(ZTile) * mTilesWidth * mTilesHeight);
+		// Allocate masked hierarchical Z buffer (if zero size leave at nullptr)
+		if( mTilesWidth * mTilesHeight > 0 )
+			mMaskedHiZBuffer = (ZTile *)mAlignedAllocCallback(32, sizeof(ZTile) * mTilesWidth * mTilesHeight);
 	}
 
 	void GetResolution(unsigned int &width, unsigned int &height) override
@@ -251,11 +255,11 @@ public:
 		height = mHeight;
 	}
 
-    void ComputeBinWidthHeight( unsigned int nBinsW, unsigned int nBinsH, unsigned int & outBinWidth, unsigned int & outBinHeight ) override
-    {
-        outBinWidth = (mWidth / nBinsW) - ((mWidth / nBinsW) % TILE_WIDTH);
-        outBinHeight = (mHeight / nBinsH) - ((mHeight / nBinsH) % TILE_HEIGHT);
-    }
+	void ComputeBinWidthHeight( unsigned int nBinsW, unsigned int nBinsH, unsigned int & outBinWidth, unsigned int & outBinHeight ) override
+	{
+		outBinWidth = (mWidth / nBinsW) - ((mWidth / nBinsW) % TILE_WIDTH);
+		outBinHeight = (mHeight / nBinsH) - ((mHeight / nBinsH) % TILE_HEIGHT);
+	}
 
     void SetNearClipPlane(float nearDist) override
 	{
@@ -1664,7 +1668,7 @@ public:
 
 			unsigned int binWidth;
 			unsigned int binHeight;
-            ComputeBinWidthHeight( nBinsW, nBinsH, binWidth, binHeight );
+			ComputeBinWidthHeight( nBinsW, nBinsH, binWidth, binHeight );
 
 			// Compute pixel bounding box
 			__mwi bbPixelMinX, bbPixelMinY, bbPixelMaxX, bbPixelMaxY;
