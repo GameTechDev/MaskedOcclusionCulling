@@ -1292,7 +1292,7 @@ public:
 	}
 
 	template<int TEST_Z, int FAST_GATHER>
-	FORCE_INLINE int RenderTriangles(const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix, ClipPlanes clipPlaneMask, const ScissorRect *scissor, const VertexLayout &vtxLayout)
+	FORCE_INLINE CullingResult RenderTriangles(const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix, ClipPlanes clipPlaneMask, const ScissorRect *scissor, const VertexLayout &vtxLayout)
 	{
 		assert(mMaskedHiZBuffer != nullptr);
 
@@ -1430,7 +1430,7 @@ public:
 #if PRECISE_COVERAGE != 0
 		_MM_SET_ROUNDING_MODE(originalRoundingMode);
 #endif
-		return cullResult;
+		return (CullingResult)cullResult;
 	}
 
 	CullingResult RenderTriangles(const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix, ClipPlanes clipPlaneMask, const ScissorRect *scissor, const VertexLayout &vtxLayout) override
