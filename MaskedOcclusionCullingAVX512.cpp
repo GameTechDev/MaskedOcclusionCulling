@@ -359,7 +359,7 @@ namespace MaskedOcclusionCullingAVX512
 
 				// Detect AVX2 & AVX512 instruction sets
 				static const unsigned int AVX2_FLAGS = (1 << 3) | (1 << 5) | (1 << 8); // BMI1 (bit manipulation) | BMI2 (bit manipulation)| AVX2
-				static const unsigned int AVX512_FLAGS = AVX2_FLAGS | (1 << 16) | (1 << 17) | (1 << 28) | (1 << 30) | (1 << 31); // AVX512F | AVX512DQ | AVX512CD | AVX512BW | AVX512VL
+				static const unsigned int AVX512_FLAGS = AVX2_FLAGS | (1 << 16) | (1 << 17) | (1 << 30) | (1 << 31); // AVX512F | AVX512CD | AVX512BW | AVX512VL
 				__cpuidex(cpui, 7, 0);
 				if ((cpui[1] & AVX512_FLAGS) != AVX512_FLAGS)
 					AVX512Support = false;
