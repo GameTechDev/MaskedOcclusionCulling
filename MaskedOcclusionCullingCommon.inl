@@ -20,60 +20,6 @@
 template<typename T> FORCE_INLINE T max(const T &a, const T &b) { return a > b ? a : b; }
 template<typename T> FORCE_INLINE T min(const T &a, const T &b) { return a < b ? a : b; }
 
-template<typename T, typename Y> FORCE_INLINE T simd_cast(Y A);
-template<> FORCE_INLINE __m128  simd_cast<__m128>(float A) { return _mm_set1_ps(A); }
-template<> FORCE_INLINE __m128  simd_cast<__m128>(__m128i A) { return _mm_castsi128_ps(A); }
-template<> FORCE_INLINE __m128  simd_cast<__m128>(__m128 A) { return A; }
-template<> FORCE_INLINE __m128i simd_cast<__m128i>(int A) { return _mm_set1_epi32(A); }
-template<> FORCE_INLINE __m128i simd_cast<__m128i>(__m128 A) { return _mm_castps_si128(A); }
-template<> FORCE_INLINE __m128i simd_cast<__m128i>(__m128i A) { return A; }
-template<> FORCE_INLINE __m256  simd_cast<__m256>(float A) { return _mm256_set1_ps(A); }
-template<> FORCE_INLINE __m256  simd_cast<__m256>(__m256i A) { return _mm256_castsi256_ps(A); }
-template<> FORCE_INLINE __m256  simd_cast<__m256>(__m256 A) { return A; }
-template<> FORCE_INLINE __m256i simd_cast<__m256i>(int A) { return _mm256_set1_epi32(A); }
-template<> FORCE_INLINE __m256i simd_cast<__m256i>(__m256 A) { return _mm256_castps_si256(A); }
-template<> FORCE_INLINE __m256i simd_cast<__m256i>(__m256i A) { return A; }
-
-// Unary operators
-static FORCE_INLINE __m128  operator-(const __m128  &A) { return _mm_xor_ps(A, _mm_set1_ps(-0.0f)); }
-static FORCE_INLINE __m128i operator-(const __m128i &A) { return _mm_sub_epi32(_mm_set1_epi32(0), A); }
-static FORCE_INLINE __m256  operator-(const __m256  &A) { return _mm256_xor_ps(A, _mm256_set1_ps(-0.0f)); }
-static FORCE_INLINE __m256i operator-(const __m256i &A) { return _mm256_sub_epi32(_mm256_set1_epi32(0), A); }
-static FORCE_INLINE __m128  operator~(const __m128  &A) { return _mm_xor_ps(A, _mm_castsi128_ps(_mm_set1_epi32(~0))); }
-static FORCE_INLINE __m128i operator~(const __m128i &A) { return _mm_xor_si128(A, _mm_set1_epi32(~0)); }
-static FORCE_INLINE __m256  operator~(const __m256  &A) { return _mm256_xor_ps(A, _mm256_castsi256_ps(_mm256_set1_epi32(~0))); }
-static FORCE_INLINE __m256i operator~(const __m256i &A) { return _mm256_xor_si256(A, _mm256_set1_epi32(~0)); }
-static FORCE_INLINE __m256 abs(const __m256 &a) { return _mm256_and_ps(a, _mm256_castsi256_ps(_mm256_set1_epi32(0x7FFFFFFF))); }
-static FORCE_INLINE __m128 abs(const __m128 &a) { return _mm_and_ps(a, _mm_castsi128_ps(_mm_set1_epi32(0x7FFFFFFF))); }
-
-// Binary operators
-#define SIMD_BINARY_OP(SIMD_TYPE, BASE_TYPE, prefix, postfix, func, op) \
-	static FORCE_INLINE SIMD_TYPE operator##op(const SIMD_TYPE &A, const SIMD_TYPE &B)		{ return _##prefix##_##func##_##postfix(A, B); } \
-	static FORCE_INLINE SIMD_TYPE operator##op(const SIMD_TYPE &A, const BASE_TYPE B)		{ return _##prefix##_##func##_##postfix(A, simd_cast<SIMD_TYPE>(B)); } \
-	static FORCE_INLINE SIMD_TYPE operator##op(const BASE_TYPE &A, const SIMD_TYPE &B)		{ return _##prefix##_##func##_##postfix(simd_cast<SIMD_TYPE>(A), B); } \
-	static FORCE_INLINE SIMD_TYPE &operator##op##=(SIMD_TYPE &A, const SIMD_TYPE &B)		{ return (A = _##prefix##_##func##_##postfix(A, B)); } \
-	static FORCE_INLINE SIMD_TYPE &operator##op##=(SIMD_TYPE &A, const BASE_TYPE B)			{ return (A = _##prefix##_##func##_##postfix(A, simd_cast<SIMD_TYPE>(B))); }
-
-#define ALL_SIMD_BINARY_OP(type_suffix, base_type, postfix, func, op) \
-	SIMD_BINARY_OP(__m128##type_suffix, base_type, mm, postfix, func, op) \
-	SIMD_BINARY_OP(__m256##type_suffix, base_type, mm256, postfix, func, op)
-
-ALL_SIMD_BINARY_OP(, float, ps, add, +)
-ALL_SIMD_BINARY_OP(, float, ps, sub, -)
-ALL_SIMD_BINARY_OP(, float, ps, mul, *)
-ALL_SIMD_BINARY_OP(, float, ps, div, / )
-ALL_SIMD_BINARY_OP(i, int, epi32, add, +)
-ALL_SIMD_BINARY_OP(i, int, epi32, sub, -)
-ALL_SIMD_BINARY_OP(, float, ps, and, &)
-ALL_SIMD_BINARY_OP(, float, ps, or , | )
-ALL_SIMD_BINARY_OP(, float, ps, xor, ^)
-SIMD_BINARY_OP(__m128i, int, mm, si128, and, &)
-SIMD_BINARY_OP(__m128i, int, mm, si128, or , | )
-SIMD_BINARY_OP(__m128i, int, mm, si128, xor, ^)
-SIMD_BINARY_OP(__m256i, int, mm256, si256, and, &)
-SIMD_BINARY_OP(__m256i, int, mm256, si256, or , | )
-SIMD_BINARY_OP(__m256i, int, mm256, si256, xor, ^)
-
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Common defines and constants
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -97,7 +43,10 @@ SIMD_BINARY_OP(__m256i, int, mm256, si256, xor, ^)
 	#define FP_INV					(1.0f / (float)(1 << FP_BITS))
 #else
 	// Note that too low precision, without precise coverage, may cause overshoots / false coverage during rasterization.
-	#define FP_BITS					16
+	// This is configured for 14 bits for AVX512 and 16 bits for SSE. Max tile slope delta is roughly 
+	// (screenWidth + 2*(GUARD_BAND_PIXEL_SIZE + 1)) * (2^FP_BITS * (TILE_HEIGHT + GUARD_BAND_PIXEL_SIZE + 1))  
+	// and must fit in 31 bits. With this config, max image resolution (width) is ~3272, so stay well clear of this limit. 
+	#define FP_BITS					(19 - TILE_HEIGHT_SHIFT)
 #endif
 
 // Tile dimensions in fixed point coordinates
@@ -202,9 +151,12 @@ public:
 	{
 		// Resolution must be a multiple of the subtile size
 		assert(width % SUB_TILE_WIDTH == 0 && height % SUB_TILE_HEIGHT == 0);
-		// Test if combination of resolution & SLOPE_FP_BITS bits may cause 32-bit overflow
 #if PRECISE_COVERAGE == 0
-		assert(7 * width < (1 << (31 - FP_BITS)));
+		// Test if combination of resolution & SLOPE_FP_BITS bits may cause 32-bit overflow. Note that the maximum resolution estimate
+		// is only an estimate (not conservative). It's advicable to stay well below the limit.
+		const unsigned int ESTIMATED_RES = ((1U << 31) - 1U) / ((1U << FP_BITS) 
+			* (TILE_HEIGHT + (unsigned int)(GUARD_BAND_PIXEL_SIZE + 1.0f))) - (2U * (unsigned int)(GUARD_BAND_PIXEL_SIZE + 1.0f));
+		assert(width < ESTIMATED_RES);
 #endif
 
 		// Delete current masked hierarchical Z buffer
@@ -1219,7 +1171,6 @@ public:
 		eventStart[0] = xDiffi[0] - _mmw_mullo_epi32(slopeFP[0], yDiffi[0]);
 		eventStart[1] = xDiffi[1] - _mmw_mullo_epi32(slopeFP[1], yDiffi[1]);
 		eventStart[2] = xDiffi[0] - _mmw_mullo_epi32(slopeFP[2], yDiffi[0]);
-
 #endif
 
 		//////////////////////////////////////////////////////////////////////////////

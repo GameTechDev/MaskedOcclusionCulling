@@ -78,6 +78,7 @@ int main(int argc, char* argv[])
 	case MaskedOcclusionCulling::SSE2: printf("Using SSE2 version\n"); break;
 	case MaskedOcclusionCulling::SSE41: printf("Using SSE41 version\n"); break;
 	case MaskedOcclusionCulling::AVX2: printf("Using AVX2 version\n"); break;
+	case MaskedOcclusionCulling::AVX512: printf("Using AVX-512 version\n"); break;
 	}
 
 	////////////////////////////////////////////////////////////////////////////////////////

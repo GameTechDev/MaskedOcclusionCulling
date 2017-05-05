@@ -11,6 +11,9 @@
     <ClCompile Include="..\MaskedOcclusionCullingAVX2.cpp">
       <Filter>MaskedOcclusionCulling</Filter>
     </ClCompile>
+    <ClCompile Include="..\MaskedOcclusionCullingAVX512.cpp">
+      <Filter>MaskedOcclusionCulling</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\CullingThreadpool.h">

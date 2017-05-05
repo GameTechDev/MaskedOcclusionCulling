@@ -47,52 +47,6 @@
 		_aligned_free(ptr);
 	}
 	
-	// Detect AVX2 / SSE4.1 support
-	static MaskedOcclusionCulling::Implementation GetCPUInstructionSet()
-	{
-		static bool initialized = false;
-		static MaskedOcclusionCulling::Implementation instructionSet = MaskedOcclusionCulling::SSE2;
-		
-		int cpui[4];
-		if (!initialized)
-		{
-			initialized = true;
-			instructionSet = MaskedOcclusionCulling::SSE2;
-	
-			int nIds, nExIds;
-			__cpuid(cpui, 0);
-			nIds = cpui[0];
-			__cpuid(cpui, 0x80000000);
-			nExIds = cpui[0];
-	
-			if (nIds >= 7 && nExIds >= 0x80000001)
-			{
-				// Test AVX2 support
-				instructionSet = MaskedOcclusionCulling::AVX2;
-				__cpuidex(cpui, 1, 0);
-				if ((cpui[2] & 0x18401000) != 0x18401000)
-					instructionSet = MaskedOcclusionCulling::SSE2;
-				__cpuidex(cpui, 7, 0);
-				if ((cpui[1] & 0x128) != 0x128)
-					instructionSet = MaskedOcclusionCulling::SSE2;
-				__cpuidex(cpui, 0x80000001, 0);
-				if ((cpui[2] & 0x20) != 0x20)
-					instructionSet = MaskedOcclusionCulling::SSE2;
-				if (instructionSet == MaskedOcclusionCulling::AVX2 && (_xgetbv(0) & 0x6) != 0x6)
-					instructionSet = MaskedOcclusionCulling::SSE2;
-			}
-			if (instructionSet == MaskedOcclusionCulling::SSE2 && nIds >= 1)
-			{
-				// Test SSE4.1 support
-				instructionSet = MaskedOcclusionCulling::SSE41;
-				__cpuidex(cpui, 1, 0);
-				if ((cpui[2] & 0x080000) != 0x080000)
-					instructionSet = MaskedOcclusionCulling::SSE2;
-			}
-		}
-		return instructionSet;
-	}
-
 #endif
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -199,6 +153,49 @@ typedef __m128i __mwi;
 #define _mmx_min_epi32 _mmw_min_epi32
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// SIMD math operators
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+template<typename T, typename Y> FORCE_INLINE T simd_cast(Y A);
+template<> FORCE_INLINE __m128  simd_cast<__m128>(float A) { return _mm_set1_ps(A); }
+template<> FORCE_INLINE __m128  simd_cast<__m128>(__m128i A) { return _mm_castsi128_ps(A); }
+template<> FORCE_INLINE __m128  simd_cast<__m128>(__m128 A) { return A; }
+template<> FORCE_INLINE __m128i simd_cast<__m128i>(int A) { return _mm_set1_epi32(A); }
+template<> FORCE_INLINE __m128i simd_cast<__m128i>(__m128 A) { return _mm_castps_si128(A); }
+template<> FORCE_INLINE __m128i simd_cast<__m128i>(__m128i A) { return A; }
+
+// Unary operators
+static FORCE_INLINE __m128  operator-(const __m128  &A) { return _mm_xor_ps(A, _mm_set1_ps(-0.0f)); }
+static FORCE_INLINE __m128i operator-(const __m128i &A) { return _mm_sub_epi32(_mm_set1_epi32(0), A); }
+static FORCE_INLINE __m128  operator~(const __m128  &A) { return _mm_xor_ps(A, _mm_castsi128_ps(_mm_set1_epi32(~0))); }
+static FORCE_INLINE __m128i operator~(const __m128i &A) { return _mm_xor_si128(A, _mm_set1_epi32(~0)); }
+static FORCE_INLINE __m128 abs(const __m128 &a) { return _mm_and_ps(a, _mm_castsi128_ps(_mm_set1_epi32(0x7FFFFFFF))); }
+
+// Binary operators
+#define SIMD_BINARY_OP(SIMD_TYPE, BASE_TYPE, prefix, postfix, func, op) \
+	static FORCE_INLINE SIMD_TYPE operator##op(const SIMD_TYPE &A, const SIMD_TYPE &B)		{ return _##prefix##_##func##_##postfix(A, B); } \
+	static FORCE_INLINE SIMD_TYPE operator##op(const SIMD_TYPE &A, const BASE_TYPE B)		{ return _##prefix##_##func##_##postfix(A, simd_cast<SIMD_TYPE>(B)); } \
+	static FORCE_INLINE SIMD_TYPE operator##op(const BASE_TYPE &A, const SIMD_TYPE &B)		{ return _##prefix##_##func##_##postfix(simd_cast<SIMD_TYPE>(A), B); } \
+	static FORCE_INLINE SIMD_TYPE &operator##op##=(SIMD_TYPE &A, const SIMD_TYPE &B)		{ return (A = _##prefix##_##func##_##postfix(A, B)); } \
+	static FORCE_INLINE SIMD_TYPE &operator##op##=(SIMD_TYPE &A, const BASE_TYPE B)			{ return (A = _##prefix##_##func##_##postfix(A, simd_cast<SIMD_TYPE>(B))); }
+
+#define ALL_SIMD_BINARY_OP(type_suffix, base_type, postfix, func, op) \
+	SIMD_BINARY_OP(__m128##type_suffix, base_type, mm, postfix, func, op) \
+
+ALL_SIMD_BINARY_OP(, float, ps, add, +)
+ALL_SIMD_BINARY_OP(, float, ps, sub, -)
+ALL_SIMD_BINARY_OP(, float, ps, mul, *)
+ALL_SIMD_BINARY_OP(, float, ps, div, / )
+ALL_SIMD_BINARY_OP(i, int, epi32, add, +)
+ALL_SIMD_BINARY_OP(i, int, epi32, sub, -)
+ALL_SIMD_BINARY_OP(, float, ps, and, &)
+ALL_SIMD_BINARY_OP(, float, ps, or , | )
+ALL_SIMD_BINARY_OP(, float, ps, xor, ^)
+SIMD_BINARY_OP(__m128i, int, mm, si128, and, &)
+SIMD_BINARY_OP(__m128i, int, mm, si128, or , | )
+SIMD_BINARY_OP(__m128i, int, mm, si128, xor, ^)
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Specialized SSE input assembly function for general vertex gather 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -274,8 +271,37 @@ namespace MaskedOcclusionCullingSSE41
 	// Utility function to create a new object using the allocator callbacks
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	static bool DetectSSE41()
+	{
+		static bool initialized = false;
+		static bool SSE41Supported = false;
+
+		int cpui[4];
+		if (!initialized)
+		{
+			initialized = true;
+
+			int nIds, nExIds;
+			__cpuid(cpui, 0);
+			nIds = cpui[0];
+			__cpuid(cpui, 0x80000000);
+			nExIds = cpui[0];
+
+			if (nIds >= 1)
+			{
+				// Test SSE4.1 support
+				__cpuidex(cpui, 1, 0);
+				SSE41Supported = (cpui[2] & 0x080000) == 0x080000;
+			}
+		}
+		return SSE41Supported;
+	}
+
 	MaskedOcclusionCulling *CreateMaskedOcclusionCulling(pfnAlignedAlloc memAlloc, pfnAlignedFree memFree)
 	{
+		if (!DetectSSE41())
+			return nullptr;
+
 		MaskedOcclusionCullingPrivate *object = (MaskedOcclusionCullingPrivate *)memAlloc(32, sizeof(MaskedOcclusionCullingPrivate));
 		new (object) MaskedOcclusionCullingPrivate(memAlloc, memFree);
 		return object;
@@ -396,6 +422,11 @@ namespace MaskedOcclusionCullingSSE2
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Object construction and allocation
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+namespace MaskedOcclusionCullingAVX512
+{
+	extern MaskedOcclusionCulling *CreateMaskedOcclusionCulling(pfnAlignedAlloc memAlloc, pfnAlignedFree memFree);
+}
+
 namespace MaskedOcclusionCullingAVX2
 {
 	extern MaskedOcclusionCulling *CreateMaskedOcclusionCulling(pfnAlignedAlloc memAlloc, pfnAlignedFree memFree);
@@ -409,13 +440,15 @@ MaskedOcclusionCulling *MaskedOcclusionCulling::Create()
 MaskedOcclusionCulling *MaskedOcclusionCulling::Create(pfnAlignedAlloc memAlloc, pfnAlignedFree memFree)
 {
 	MaskedOcclusionCulling *object = nullptr;
-	Implementation instructionSet = GetCPUInstructionSet();
 
-	if (instructionSet == AVX2)
-		object = MaskedOcclusionCullingAVX2::CreateMaskedOcclusionCulling(memAlloc, memFree);	// Use AVX2 optimized (fast) version
-	else if (instructionSet == SSE41)
+	// Return best supported version
+	if (object == nullptr)
+		object = MaskedOcclusionCullingAVX512::CreateMaskedOcclusionCulling(memAlloc, memFree);	// Use AVX512 version
+	if (object == nullptr)
+		object = MaskedOcclusionCullingAVX2::CreateMaskedOcclusionCulling(memAlloc, memFree);	// Use AVX2 version
+	if (object == nullptr)
 		object = MaskedOcclusionCullingSSE41::CreateMaskedOcclusionCulling(memAlloc, memFree);	// Use SSE4.1 version
-	else
+	if (object == nullptr)
 		object = MaskedOcclusionCullingSSE2::CreateMaskedOcclusionCulling(memAlloc, memFree);	// Use SSE2 (slow) version
 
 	return object;

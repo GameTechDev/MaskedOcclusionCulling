@@ -19,6 +19,13 @@
 #include <float.h>
 #include "MaskedOcclusionCulling.h"
 
+#if !defined(__INTEL_COMPILER) && _MSC_VER < 1900
+	// If you remove/comment this error, the code will compile & use the SSE41 version instead. 
+	#error Older versions than visual studio 2015 not supported due to compiler bug(s)
+#endif
+
+#if defined(__INTEL_COMPILER) || _MSC_VER >= 1900	// Make sure compiler features AVX2 intrinsics	
+
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Compiler specific functions: currently only MSC and Intel compiler should work.
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -115,6 +122,64 @@ typedef __m256i __mwi;
 #define _mmx_min_epi32 _mm_min_epi32
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// SIMD math operators
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+template<typename T, typename Y> FORCE_INLINE T simd_cast(Y A);
+template<> FORCE_INLINE __m128  simd_cast<__m128>(float A) { return _mm_set1_ps(A); }
+template<> FORCE_INLINE __m128  simd_cast<__m128>(__m128i A) { return _mm_castsi128_ps(A); }
+template<> FORCE_INLINE __m128  simd_cast<__m128>(__m128 A) { return A; }
+template<> FORCE_INLINE __m128i simd_cast<__m128i>(int A) { return _mm_set1_epi32(A); }
+template<> FORCE_INLINE __m128i simd_cast<__m128i>(__m128 A) { return _mm_castps_si128(A); }
+template<> FORCE_INLINE __m128i simd_cast<__m128i>(__m128i A) { return A; }
+template<> FORCE_INLINE __m256  simd_cast<__m256>(float A) { return _mm256_set1_ps(A); }
+template<> FORCE_INLINE __m256  simd_cast<__m256>(__m256i A) { return _mm256_castsi256_ps(A); }
+template<> FORCE_INLINE __m256  simd_cast<__m256>(__m256 A) { return A; }
+template<> FORCE_INLINE __m256i simd_cast<__m256i>(int A) { return _mm256_set1_epi32(A); }
+template<> FORCE_INLINE __m256i simd_cast<__m256i>(__m256 A) { return _mm256_castps_si256(A); }
+template<> FORCE_INLINE __m256i simd_cast<__m256i>(__m256i A) { return A; }
+
+// Unary operators
+static FORCE_INLINE __m128  operator-(const __m128  &A) { return _mm_xor_ps(A, _mm_set1_ps(-0.0f)); }
+static FORCE_INLINE __m128i operator-(const __m128i &A) { return _mm_sub_epi32(_mm_set1_epi32(0), A); }
+static FORCE_INLINE __m256  operator-(const __m256  &A) { return _mm256_xor_ps(A, _mm256_set1_ps(-0.0f)); }
+static FORCE_INLINE __m256i operator-(const __m256i &A) { return _mm256_sub_epi32(_mm256_set1_epi32(0), A); }
+static FORCE_INLINE __m128  operator~(const __m128  &A) { return _mm_xor_ps(A, _mm_castsi128_ps(_mm_set1_epi32(~0))); }
+static FORCE_INLINE __m128i operator~(const __m128i &A) { return _mm_xor_si128(A, _mm_set1_epi32(~0)); }
+static FORCE_INLINE __m256  operator~(const __m256  &A) { return _mm256_xor_ps(A, _mm256_castsi256_ps(_mm256_set1_epi32(~0))); }
+static FORCE_INLINE __m256i operator~(const __m256i &A) { return _mm256_xor_si256(A, _mm256_set1_epi32(~0)); }
+static FORCE_INLINE __m256 abs(const __m256 &a) { return _mm256_and_ps(a, _mm256_castsi256_ps(_mm256_set1_epi32(0x7FFFFFFF))); }
+static FORCE_INLINE __m128 abs(const __m128 &a) { return _mm_and_ps(a, _mm_castsi128_ps(_mm_set1_epi32(0x7FFFFFFF))); }
+
+// Binary operators
+#define SIMD_BINARY_OP(SIMD_TYPE, BASE_TYPE, prefix, postfix, func, op) \
+	static FORCE_INLINE SIMD_TYPE operator##op(const SIMD_TYPE &A, const SIMD_TYPE &B)		{ return _##prefix##_##func##_##postfix(A, B); } \
+	static FORCE_INLINE SIMD_TYPE operator##op(const SIMD_TYPE &A, const BASE_TYPE B)		{ return _##prefix##_##func##_##postfix(A, simd_cast<SIMD_TYPE>(B)); } \
+	static FORCE_INLINE SIMD_TYPE operator##op(const BASE_TYPE &A, const SIMD_TYPE &B)		{ return _##prefix##_##func##_##postfix(simd_cast<SIMD_TYPE>(A), B); } \
+	static FORCE_INLINE SIMD_TYPE &operator##op##=(SIMD_TYPE &A, const SIMD_TYPE &B)		{ return (A = _##prefix##_##func##_##postfix(A, B)); } \
+	static FORCE_INLINE SIMD_TYPE &operator##op##=(SIMD_TYPE &A, const BASE_TYPE B)			{ return (A = _##prefix##_##func##_##postfix(A, simd_cast<SIMD_TYPE>(B))); }
+
+#define ALL_SIMD_BINARY_OP(type_suffix, base_type, postfix, func, op) \
+	SIMD_BINARY_OP(__m128##type_suffix, base_type, mm, postfix, func, op) \
+	SIMD_BINARY_OP(__m256##type_suffix, base_type, mm256, postfix, func, op)
+
+ALL_SIMD_BINARY_OP(, float, ps, add, +)
+ALL_SIMD_BINARY_OP(, float, ps, sub, -)
+ALL_SIMD_BINARY_OP(, float, ps, mul, *)
+ALL_SIMD_BINARY_OP(, float, ps, div, / )
+ALL_SIMD_BINARY_OP(i, int, epi32, add, +)
+ALL_SIMD_BINARY_OP(i, int, epi32, sub, -)
+ALL_SIMD_BINARY_OP(, float, ps, and, &)
+ALL_SIMD_BINARY_OP(, float, ps, or , | )
+ALL_SIMD_BINARY_OP(, float, ps, xor, ^)
+SIMD_BINARY_OP(__m128i, int, mm, si128, and, &)
+SIMD_BINARY_OP(__m128i, int, mm, si128, or , | )
+SIMD_BINARY_OP(__m128i, int, mm, si128, xor, ^)
+SIMD_BINARY_OP(__m256i, int, mm256, si256, and, &)
+SIMD_BINARY_OP(__m256i, int, mm256, si256, or , | )
+SIMD_BINARY_OP(__m256i, int, mm256, si256, xor, ^)
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Specialized AVX input assembly function for general vertex gather 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -183,10 +248,75 @@ namespace MaskedOcclusionCullingAVX2
 	typedef MaskedOcclusionCulling::pfnAlignedAlloc            pfnAlignedAlloc;
 	typedef MaskedOcclusionCulling::pfnAlignedFree             pfnAlignedFree;
 
+	static bool DetectAVX2()
+	{
+		static bool initialized = false;
+		static bool AVX2Support = false;
+
+		int cpui[4];
+		if (!initialized)
+		{
+			initialized = true;
+			AVX2Support = false;
+
+			int nIds, nExIds;
+			__cpuid(cpui, 0);
+			nIds = cpui[0];
+			__cpuid(cpui, 0x80000000);
+			nExIds = cpui[0];
+
+			if (nIds >= 7 && nExIds >= 0x80000001)
+			{
+				AVX2Support = true;
+
+				// Check support for bit counter instructions (lzcnt)
+				__cpuidex(cpui, 0x80000001, 0);
+				if ((cpui[2] & 0x20) != 0x20)
+					AVX2Support = false;
+
+				// Check masks for misc instructions (FMA)
+				static const unsigned int FMA_MOVBE_OSXSAVE_MASK = (1 << 12) | (1 << 22) | (1 << 27);
+				__cpuidex(cpui, 1, 0);
+				if ((cpui[2] & FMA_MOVBE_OSXSAVE_MASK) != FMA_MOVBE_OSXSAVE_MASK)
+					AVX2Support = false;
+
+				// Check XCR0 register to ensure that all registers are enabled (by OS)
+				static const unsigned int XCR0_MASK = (1 << 2) | (1 << 1); // XMM | YMM
+				if (AVX2Support && (_xgetbv(0) & XCR0_MASK) != XCR0_MASK)
+					AVX2Support = false;
+
+				// Detect AVX2 & AVX512 instruction sets
+				static const unsigned int AVX2_FLAGS = (1 << 3) | (1 << 5) | (1 << 8); // BMI1 (bit manipulation) | BMI2 (bit manipulation)| AVX2
+				__cpuidex(cpui, 7, 0);
+				if ((cpui[1] & AVX2_FLAGS) != AVX2_FLAGS)
+					AVX2Support = false;
+			}
+		}
+		return AVX2Support;
+	}
+
 	MaskedOcclusionCulling *CreateMaskedOcclusionCulling(pfnAlignedAlloc memAlloc, pfnAlignedFree memFree)
 	{
+		if (!DetectAVX2())
+			return nullptr;
+		
 		MaskedOcclusionCullingPrivate *object = (MaskedOcclusionCullingPrivate *)memAlloc(32, sizeof(MaskedOcclusionCullingPrivate));
 		new (object) MaskedOcclusionCullingPrivate(memAlloc, memFree);
 		return object;
 	}
 };
+
+#else
+
+namespace MaskedOcclusionCullingAVX2
+{
+	typedef MaskedOcclusionCulling::pfnAlignedAlloc            pfnAlignedAlloc;
+	typedef MaskedOcclusionCulling::pfnAlignedFree             pfnAlignedFree;
+
+	MaskedOcclusionCulling *CreateMaskedOcclusionCulling(pfnAlignedAlloc memAlloc, pfnAlignedFree memFree)
+	{
+		return nullptr;
+	}
+};
+
+#endif
