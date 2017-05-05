@@ -6,14 +6,14 @@ on the hierarchical depth buffer. It lets us efficiently parallelize both covera
 
 ## Requirements
 
-This code is mainly optimized for the AVX2 instruction set, and some AVX specific instructions are required for best performance. However, we also provide
+This code is mainly optimized for the AVX-512 and AVX2 instruction sets, and some AVX specific instructions are required for best performance. However, we also provide
 SSE 4.1 and SSE 2 implementations for backwards compatibility. The appropriate implementation will be chosen during run-time based on the CPU's capabilities.
 
 ## Notes on build time
 
 The code is optimized for runtime performance and may require a long time to compile due to heavy code inlining. This can be worked around by compiling 
-a library file. An alternative solution is to disable *whole program optimizations* for the `MaskedOcclusionCulling.cpp` 
-and `MaskedOcclusionCullingAVX2.cpp` files. It does not impact runtime performance, but greatly reduces the time of program linking. 
+a library file. An alternative solution is to disable *whole program optimizations* for the `MaskedOcclusionCulling.cpp`, 
+`MaskedOcclusionCullingAVX2.cpp` and `MaskedOcclusionCullingAVX512.cpp` files. It does not impact runtime performance, but greatly reduces the time of program linking. 
 
 ## <a name="cs"></a>Notes on coordinate systems and winding
 
@@ -39,7 +39,7 @@ the API. Please refer to the documentation in the header file for further detail
 
 We begin by creating a new instance of the occlusion culling object. The object is created using the static `Create()` function rather than a standard
 constructor, and can be destroyed using the `Destroy()` function. The reason for using the factory `Create()`/`Destroy()` design pattern is that we want to
-support custom (aligned) memory allocators, and that the library choses either the AVX or SSE implementation based on the CPU's capabilities.
+support custom (aligned) memory allocators, and that the library choses either the AVX-512, AVX or SSE implementation based on the CPU's capabilities.
 
 ```C++
 MaskedOcclusionCulling *moc = MaskedOcclusionCulling::Create();
@@ -360,6 +360,8 @@ paper) and noted speedup of roughly *3x*, running on four threads, compared to o
 
 ## Version History
 
+* Version 1.3: 
+  * Added support for AVX-512 capable CPU's. Currently requires building the project using Intel's C++ compiler.
 * Version 1.2: 
   * Added support for threading, through a binning rasterizer. The `CullingThreadpool` class implements an example multi-threaded task system with a very similar 
     API to the `MaskedOcclusionCulling`class.
