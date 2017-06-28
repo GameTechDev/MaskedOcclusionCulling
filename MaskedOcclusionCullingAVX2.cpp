@@ -38,6 +38,10 @@
 		return idx;
 	}
 
+	// For performance reasons, the MaskedOcclusionCullingAVX2.cpp file should be compiled with VEX encoding for SSE instructions (to avoid 
+	// AVX-SSE transition penalties, see https://software.intel.com/en-us/articles/avoiding-avx-sse-transition-penalties). However, the SSE
+	// version in MaskedOcclusionCulling.cpp _must_ be compiled without VEX encoding to allow backwards compatibility. Best practice is to 
+	// use lowest supported target platform (e.g. /arch:SSE2) as project default, and elevate only the MaskedOcclusionCullingAVX2.cpp file.
 	#ifndef __AVX2__
 		#error For best performance, MaskedOcclusionCullingAVX2.cpp should be compiled with /arch:AVX2
 	#endif

@@ -26,6 +26,14 @@
 
 #ifdef _MSC_VER
 
+#if defined(__AVX__) || defined(__AVX2__)
+// For performance reasons, the MaskedOcclusionCullingAVX2.cpp file should be compiled with VEX encoding for SSE instructions (to avoid 
+// AVX-SSE transition penalties, see https://software.intel.com/en-us/articles/avoiding-avx-sse-transition-penalties). However, the SSE
+// version in MaskedOcclusionCulling.cpp _must_ be compiled without VEX encoding to allow backwards compatibility. Best practice is to 
+// use lowest supported target platform (/arch:SSE2) as project default, and elevate only the MaskedOcclusionCullingAVX2.cpp file.
+#error The MaskedOcclusionCulling.cpp should be compiled with lowest supported target platform, e.g. /arch:SSE2
+#endif
+
 	#include <intrin.h>
 
 	#define FORCE_INLINE __forceinline
@@ -93,6 +101,7 @@
 		}
 		return instructionSet;
 	}
+
 
 #endif
 
