@@ -1097,7 +1097,7 @@ public:
 		xDiffi[0] = ipVtxX[0] - _mmw_slli_epi32(bbPixelMinX, FP_BITS);
 		xDiffi[1] = midPixelX - _mmw_slli_epi32(bbPixelMinX, FP_BITS);
 		yDiffi[0] = ipVtxY[0] - _mmw_slli_epi32(bbPixelMinY, FP_BITS);
-		yDiffi[1] = midPixelY - _mmw_slli_epi32(midTileY, FP_BITS + TILE_HEIGHT_SHIFT);
+		yDiffi[1] = midPixelY - _mmw_slli_epi32(bbMidTileY, FP_BITS + TILE_HEIGHT_SHIFT);
 
 		//////////////////////////////////////////////////////////////////////////////
 		// Edge slope setup - Note we do not conform to DX/GL rasterization rules
