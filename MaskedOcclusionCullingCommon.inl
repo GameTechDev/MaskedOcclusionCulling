@@ -133,6 +133,7 @@ public:
 	__m128			mICenter;
 	__m128i			mIScreenSize;
 
+	BackfaceWinding mBackfaceWinding;
 	float			mNearDist;
 	int				mWidth;
 	int				mHeight;
@@ -153,6 +154,7 @@ public:
 		mAlignedFreeCallback = memFree;
 
 		SetNearClipPlane( 0.0f );
+		SetBackfaceWinding( BACKFACE_CW );
 		mCSFrustumPlanes[0] = _mm_setr_ps(0.0f, 0.0f, 1.0f, 0.0f);
 		mCSFrustumPlanes[1] = _mm_setr_ps(1.0f, 0.0f, 1.0f, 0.0f);
 		mCSFrustumPlanes[2] = _mm_setr_ps(-1.0f, 0.0f, 1.0f, 0.0f);
@@ -240,6 +242,13 @@ public:
 		// Setup the near frustum plane
 		mNearDist = nearDist;
 		mCSFrustumPlanes[0] = _mm_setr_ps(0.0f, 0.0f, 1.0f, -nearDist);
+	}
+
+	void SetBackfaceWinding(BackfaceWinding winding) override
+	{
+		// winding must be one of BACKFACE_NONE, BACKFACE_CW or BACKFACE_CCW
+		assert(bfWinding == BACKFACE_NONE || bfWinding == BACKFACE_CW || bfWinding == BACKFACE_CCW);
+		mBackfaceWinding = winding;
 	}
 
 	float GetNearClipPlane() override
@@ -528,6 +537,7 @@ public:
 		bbmaxY = _mmw_min_epi32(bbmaxY, _mmw_set1_epi32(scissor->mMaxY));
 	}
 
+#if PRECISE_COVERAGE != 0
 	FORCE_INLINE void SortVertices(__mwi *vX, __mwi *vY)
 	{
 		// Rotate the triangle in the winding order until v0 is the vertex with lowest Y value
@@ -548,6 +558,34 @@ public:
 		}
 	}
 
+	FORCE_INLINE int CullBackfaces(__mwi *ipVtxX, __mwi *ipVtxY, __mw *pVtxX, __mw *pVtxY, __mw *pVtxZ, __mw ccwMask)
+	{
+		// Reverse vertex order if non cw faces are considered front facing (rasterizer code requires CCW order)
+		if (!(mBackfaceWinding & BACKFACE_CW))
+		{
+			__mw tmpX, tmpY, tmpZ;
+			__mwi itmpX, itmpY;
+			itmpX = _mmw_blendv_epi32(ipVtxX[2], ipVtxX[0], simd_cast<__mwi>(ccwMask));
+			itmpY = _mmw_blendv_epi32(ipVtxY[2], ipVtxY[0], simd_cast<__mwi>(ccwMask));
+			tmpX = _mmw_blendv_ps(pVtxX[2], pVtxX[0], ccwMask);
+			tmpY = _mmw_blendv_ps(pVtxY[2], pVtxY[0], ccwMask);
+			tmpZ = _mmw_blendv_ps(pVtxZ[2], pVtxZ[0], ccwMask);
+			ipVtxX[2] = _mmw_blendv_ps(ipVtxX[0], ipVtxX[2], simd_cast<__mwi>(ccwMask));
+			ipVtxY[2] = _mmw_blendv_ps(ipVtxY[0], ipVtxY[2], simd_cast<__mwi>(ccwMask));
+			pVtxX[2] = _mmw_blendv_ps(pVtxX[0], pVtxX[2], ccwMask);
+			pVtxY[2] = _mmw_blendv_ps(pVtxY[0], pVtxY[2], ccwMask);
+			pVtxZ[2] = _mmw_blendv_ps(pVtxZ[0], pVtxZ[2], ccwMask);
+			ipVtxX[0] = itmpX;
+			ipVtxY[0] = itmpY;
+			pVtxX[0] = tmpX;
+			pVtxY[0] = tmpY;
+			pVtxZ[0] = tmpZ;
+		}
+
+		// Return a lane mask with all front faces set
+		return ((mBackfaceWinding & BACKFACE_CCW) ? 0 : _mmw_movemask_ps(ccwMask)) | ((mBackfaceWinding & BACKFACE_CW) ? 0 : ~_mmw_movemask_ps(ccwMask));
+	}
+#else
 	FORCE_INLINE void SortVertices(__mw *vX, __mw *vY)
 	{
 		// Rotate the triangle in the winding order until v0 is the vertex with lowest Y value
@@ -567,6 +605,28 @@ public:
 			vY[2] = sY;
 		}
 	}
+
+	FORCE_INLINE int CullBackfaces(__mw *pVtxX, __mw *pVtxY, __mw *pVtxZ, __mw ccwMask)
+	{
+		// Reverse vertex order if non cw faces are considered front facing (rasterizer code requires CCW order)
+		if (!(mBackfaceWinding & BACKFACE_CW))
+		{
+			__mw tmpX, tmpY, tmpZ;
+			tmpX = _mmw_blendv_ps(pVtxX[2], pVtxX[0], ccwMask);
+			tmpY = _mmw_blendv_ps(pVtxY[2], pVtxY[0], ccwMask);
+			tmpZ = _mmw_blendv_ps(pVtxZ[2], pVtxZ[0], ccwMask);
+			pVtxX[2] = _mmw_blendv_ps(pVtxX[0], pVtxX[2], ccwMask);
+			pVtxY[2] = _mmw_blendv_ps(pVtxY[0], pVtxY[2], ccwMask);
+			pVtxZ[2] = _mmw_blendv_ps(pVtxZ[0], pVtxZ[2], ccwMask);
+			pVtxX[0] = tmpX;
+			pVtxY[0] = tmpY;
+			pVtxZ[0] = tmpZ;
+		}
+
+		// Return a lane mask with all front faces set
+		return ((mBackfaceWinding & BACKFACE_CCW) ? 0 : _mmw_movemask_ps(ccwMask)) | ((mBackfaceWinding & BACKFACE_CW) ? 0 : ~_mmw_movemask_ps(ccwMask));
+	}
+#endif
 
 	FORCE_INLINE void ComputeDepthPlane(const __mw *pVtxX, const __mw *pVtxY, const __mw *pVtxZ, __mw &zPixelDx, __mw &zPixelDy) const
 	{
@@ -1118,8 +1178,8 @@ public:
 		slope[1] = _mmw_blendv_ps(slope[1], _mmw_neg_ps(horizontalSlopeDelta), simd_cast<__mw>(horizontalSlope1));
 
 		__mwi vy[3] = { yDiffi[0], yDiffi[1], yDiffi[0] };
-		__mwi offset0 = _mmw_and_epi32(_mmw_add_epi32(yDiffi[0], _mmw_set1_epi32(FP_HALF_PIXEL - 1)), _mmw_set1_epi32((~0) << FP_BITS));
-		__mwi offset1 = _mmw_and_epi32(_mmw_add_epi32(yDiffi[1], _mmw_set1_epi32(FP_HALF_PIXEL - 1)), _mmw_set1_epi32((~0) << FP_BITS));
+		__mwi offset0 = _mmw_and_epi32(_mmw_add_epi32(yDiffi[0], _mmw_set1_epi32(FP_HALF_PIXEL - 1)), _mmw_set1_epi32((int)((~0u) << FP_BITS)));
+		__mwi offset1 = _mmw_and_epi32(_mmw_add_epi32(yDiffi[1], _mmw_set1_epi32(FP_HALF_PIXEL - 1)), _mmw_set1_epi32((int)((~0u) << FP_BITS)));
 		vy[0] = _mmw_blendv_epi32(yDiffi[0], offset0, horizontalSlope0);
 		vy[1] = _mmw_blendv_epi32(yDiffi[1], offset1, horizontalSlope1);
 
@@ -1403,7 +1463,13 @@ public:
 			__mw triArea1 = _mmw_mul_ps(_mmw_sub_ps(pVtxX[1], pVtxX[0]), _mmw_sub_ps(pVtxY[2], pVtxY[0]));
 			__mw triArea2 = _mmw_mul_ps(_mmw_sub_ps(pVtxX[0], pVtxX[2]), _mmw_sub_ps(pVtxY[0], pVtxY[1]));
 			__mw triArea = _mmw_sub_ps(triArea1, triArea2);
-			triMask &= _mmw_movemask_ps(_mmw_cmpgt_ps(triArea, _mmw_setzero_ps()));
+			__mw ccwMask = _mmw_cmpgt_ps(triArea, _mmw_setzero_ps());
+
+#if PRECISE_COVERAGE != 0
+			triMask &= CullBackfaces(ipVtxX, ipVtxY, pVtxX, pVtxY, pVtxZ, ccwMask);
+#else
+			triMask &= CullBackfaces(pVtxX, pVtxY, pVtxZ, ccwMask);
+#endif
 
 			if (triMask == 0x0)
 				continue;
@@ -1655,7 +1721,13 @@ public:
 			__mw triArea1 = _mmw_mul_ps(_mmw_sub_ps(pVtxX[1], pVtxX[0]), _mmw_sub_ps(pVtxY[2], pVtxY[0]));
 			__mw triArea2 = _mmw_mul_ps(_mmw_sub_ps(pVtxX[0], pVtxX[2]), _mmw_sub_ps(pVtxY[0], pVtxY[1]));
 			__mw triArea = _mmw_sub_ps(triArea1, triArea2);
-			triMask &= _mmw_movemask_ps(_mmw_cmpgt_ps(triArea, _mmw_setzero_ps()));
+			__mw ccwMask = _mmw_cmpgt_ps(triArea, _mmw_setzero_ps());
+
+#if PRECISE_COVERAGE != 0
+			triMask &= CullBackfaces(ipVtxX, ipVtxY, pVtxX, pVtxY, pVtxZ, ccwMask);
+#else
+			triMask &= CullBackfaces(pVtxX, pVtxY, pVtxZ, ccwMask);
+#endif
 
 			if (triMask == 0x0)
 				continue;

@@ -100,29 +100,36 @@ public:
 
 	enum Implementation 
 	{
-		SSE2 = 0,
-		SSE41 = 1,
-		AVX2 = 2,
+		SSE2   = 0,
+		SSE41  = 1,
+		AVX2   = 2,
 		AVX512 = 3
+	};
+
+	enum BackfaceWinding
+	{
+		BACKFACE_NONE = 0,
+		BACKFACE_CW   = 1,
+		BACKFACE_CCW  = 2,
 	};
 
 	enum CullingResult
 	{
-		VISIBLE = 0x0,
-		OCCLUDED = 0x1,
+		VISIBLE     = 0x0,
+		OCCLUDED    = 0x1,
 		VIEW_CULLED = 0x3
 	};
 
 	enum ClipPlanes
 	{
-		CLIP_PLANE_NONE = 0x00,
-		CLIP_PLANE_NEAR = 0x01,
-		CLIP_PLANE_LEFT = 0x02,
-		CLIP_PLANE_RIGHT = 0x04,
+		CLIP_PLANE_NONE   = 0x00,
+		CLIP_PLANE_NEAR   = 0x01,
+		CLIP_PLANE_LEFT   = 0x02,
+		CLIP_PLANE_RIGHT  = 0x04,
 		CLIP_PLANE_BOTTOM = 0x08,
-		CLIP_PLANE_TOP = 0x10,
-		CLIP_PLANE_SIDES = (CLIP_PLANE_LEFT | CLIP_PLANE_RIGHT | CLIP_PLANE_BOTTOM | CLIP_PLANE_TOP),
-		CLIP_PLANE_ALL = (CLIP_PLANE_LEFT | CLIP_PLANE_RIGHT | CLIP_PLANE_BOTTOM | CLIP_PLANE_TOP | CLIP_PLANE_NEAR)
+		CLIP_PLANE_TOP    = 0x10,
+		CLIP_PLANE_SIDES  = (CLIP_PLANE_LEFT | CLIP_PLANE_RIGHT | CLIP_PLANE_BOTTOM | CLIP_PLANE_TOP),
+		CLIP_PLANE_ALL    = (CLIP_PLANE_LEFT | CLIP_PLANE_RIGHT | CLIP_PLANE_BOTTOM | CLIP_PLANE_TOP | CLIP_PLANE_NEAR)
 	};
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -177,6 +184,7 @@ public:
 		unsigned int mTriIdx;       //!< Index of next triangle to be written, clear before calling BinTriangles to start from the beginning of the list
 		float		 *mPtr;         //!< Scratchpad buffer allocated by the host application
 	};
+
 	struct OcclusionCullingStatistics
 	{
 		struct
@@ -256,6 +264,17 @@ public:
 	 * \param nearDist The distance to the near clipping plane, given as clip space w
 	 */
 	virtual void SetNearClipPlane(float nearDist) = 0;
+
+	/*!
+	* \brief Sets which triangle winding is considered to be backfacing. Clockwise winding
+	* (BACKFACE_CW) is recommended, and other winding orders may incur a slight performance
+	* penalty. You may use BACKFACE_NONE to disable culling for double sided geometry. Note
+	* that backface winding affects both RenderTriangles() and TestTriangles().
+	*
+	* \param bfWinding Triangle winding order to consider backfacing, must be one one of
+	*        BACKFACE_NONE, BACKFACE_CW and BACKFACE_CCW.
+	*/
+	virtual void SetBackfaceWinding(BackfaceWinding winding) = 0;
 
 	/*!
 	* \brief Gets the distance for the near clipping plane. 

@@ -157,7 +157,7 @@ MAKE_ACCESSOR(simd_i32, __m512i, int, const, 16)
 
 typedef MaskedOcclusionCulling::VertexLayout VertexLayout;
 
-static FORCE_INLINE void GatherVertices(__m512 *vtxX, __m512 *vtxY, __m512 *vtxW, const float *inVtx, const unsigned int *inTrisPtr, int numLanes, const VertexLayout &vtxLayout)
+FORCE_INLINE void GatherVertices(__m512 *vtxX, __m512 *vtxY, __m512 *vtxW, const float *inVtx, const unsigned int *inTrisPtr, int numLanes, const VertexLayout &vtxLayout)
 {
 	assert(numLanes >= 1);
 
@@ -208,59 +208,59 @@ namespace MaskedOcclusionCullingAVX512
 	// Poorly implemented functions. TODO: fix common (maskedOcclusionCullingCommon.inl) code to improve perf
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	static FORCE_INLINE __m512 _mmw_floor_ps(__m512 x)
+	FORCE_INLINE __m512 _mmw_floor_ps(__m512 x)
 	{
 		return _mm512_roundscale_ps(x, 1); // 1 = floor
 	}
 
-	static FORCE_INLINE __m512 _mmw_ceil_ps(__m512 x)
+	FORCE_INLINE __m512 _mmw_ceil_ps(__m512 x)
 	{
 		return _mm512_roundscale_ps(x, 2); // 2 = ceil
 	}
 
-	static FORCE_INLINE __m512i _mmw_cmpeq_epi32(__m512i a, __m512i b)
+	FORCE_INLINE __m512i _mmw_cmpeq_epi32(__m512i a, __m512i b)
 	{
 		__mmask16 mask = _mm512_cmpeq_epi32_mask(a, b);
 		return _mm512_mask_mov_epi32(_mm512_set1_epi32(0), mask, _mm512_set1_epi32(~0));
 	}
 
-	static FORCE_INLINE __m512i _mmw_cmpgt_epi32(__m512i a, __m512i b)
+	FORCE_INLINE __m512i _mmw_cmpgt_epi32(__m512i a, __m512i b)
 	{
 		__mmask16 mask = _mm512_cmpgt_epi32_mask(a, b);
 		return _mm512_mask_mov_epi32(_mm512_set1_epi32(0), mask, _mm512_set1_epi32(~0));
 	}
 
-	static FORCE_INLINE bool _mmw_testz_epi32(__m512i a, __m512i b)
+	FORCE_INLINE bool _mmw_testz_epi32(__m512i a, __m512i b)
 	{
 		__mmask16 mask = _mm512_cmpeq_epi32_mask(_mm512_and_si512(a, b), _mm512_set1_epi32(0));
 		return mask == 0xFFFF;
 	}
 
-	static FORCE_INLINE __m512 _mmw_cmpge_ps(__m512 a, __m512 b)
+	FORCE_INLINE __m512 _mmw_cmpge_ps(__m512 a, __m512 b)
 	{
 		__mmask16 mask = _mm512_cmp_ps_mask(a, b, _CMP_GE_OQ);
 		return _mm512_castsi512_ps(_mm512_mask_mov_epi32(_mm512_set1_epi32(0), mask, _mm512_set1_epi32(~0)));
 	}
 
-	static FORCE_INLINE __m512 _mmw_cmpgt_ps(__m512 a, __m512 b)
+	FORCE_INLINE __m512 _mmw_cmpgt_ps(__m512 a, __m512 b)
 	{
 		__mmask16 mask = _mm512_cmp_ps_mask(a, b, _CMP_GT_OQ);
 		return _mm512_castsi512_ps(_mm512_mask_mov_epi32(_mm512_set1_epi32(0), mask, _mm512_set1_epi32(~0)));
 	}
 
-	static FORCE_INLINE __m512 _mmw_cmpeq_ps(__m512 a, __m512 b)
+	FORCE_INLINE __m512 _mmw_cmpeq_ps(__m512 a, __m512 b)
 	{
 		__mmask16 mask = _mm512_cmp_ps_mask(a, b, _CMP_EQ_OQ);
 		return _mm512_castsi512_ps(_mm512_mask_mov_epi32(_mm512_set1_epi32(0), mask, _mm512_set1_epi32(~0)));
 	}
 
-	static FORCE_INLINE __mmask16 _mmw_movemask_ps(const __m512 &a)
+	FORCE_INLINE __mmask16 _mmw_movemask_ps(const __m512 &a)
 	{
 		__mmask16 mask = _mm512_cmp_epi32_mask(_mm512_and_si512(_mm512_castps_si512(a), _mm512_set1_epi32(0x80000000)), _mm512_set1_epi32(0), 4);	// a & 0x8000000 != 0
 		return mask;
 	}
 
-	static FORCE_INLINE __m512 _mmw_blendv_ps(const __m512 &a, const __m512 &b, const __m512 &c)
+	FORCE_INLINE __m512 _mmw_blendv_ps(const __m512 &a, const __m512 &b, const __m512 &c)
 	{
 		__mmask16 mask = _mmw_movemask_ps(c);
 		return _mm512_mask_mov_ps(a, mask, b);

@@ -235,20 +235,20 @@ FORCE_INLINE void GatherVertices(__m128 *vtxX, __m128 *vtxY, __m128 *vtxW, const
 
 namespace MaskedOcclusionCullingSSE41
 {
-	static FORCE_INLINE __m128i _mmw_mullo_epi32(const __m128i &a, const __m128i &b) { return _mm_mullo_epi32(a, b); }
-	static FORCE_INLINE __m128i _mmw_min_epi32(const __m128i &a, const __m128i &b) { return _mm_min_epi32(a, b); }
-	static FORCE_INLINE __m128i _mmw_max_epi32(const __m128i &a, const __m128i &b) { return _mm_max_epi32(a, b); }
-	static FORCE_INLINE __m128 _mmw_blendv_ps(const __m128 &a, const __m128 &b, const __m128 &c) { return _mm_blendv_ps(a, b, c); }
-	static FORCE_INLINE int _mmw_testz_epi32(const __m128i &a, const __m128i &b) { return _mm_testz_si128(a, b); }
-	static FORCE_INLINE __m128 _mmx_dp4_ps(const __m128 &a, const __m128 &b) { return _mm_dp_ps(a, b, 0xFF); }
-	static FORCE_INLINE __m128 _mmw_floor_ps(const __m128 &a) { return _mm_round_ps(a, _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC); }
-	static FORCE_INLINE __m128 _mmw_ceil_ps(const __m128 &a) { return _mm_round_ps(a, _MM_FROUND_TO_POS_INF | _MM_FROUND_NO_EXC);	}
-	static FORCE_INLINE __m128i _mmw_transpose_epi8(const __m128i &a)
+	FORCE_INLINE __m128i _mmw_mullo_epi32(const __m128i &a, const __m128i &b) { return _mm_mullo_epi32(a, b); }
+	FORCE_INLINE __m128i _mmw_min_epi32(const __m128i &a, const __m128i &b) { return _mm_min_epi32(a, b); }
+	FORCE_INLINE __m128i _mmw_max_epi32(const __m128i &a, const __m128i &b) { return _mm_max_epi32(a, b); }
+	FORCE_INLINE __m128 _mmw_blendv_ps(const __m128 &a, const __m128 &b, const __m128 &c) { return _mm_blendv_ps(a, b, c); }
+	FORCE_INLINE int _mmw_testz_epi32(const __m128i &a, const __m128i &b) { return _mm_testz_si128(a, b); }
+	FORCE_INLINE __m128 _mmx_dp4_ps(const __m128 &a, const __m128 &b) { return _mm_dp_ps(a, b, 0xFF); }
+	FORCE_INLINE __m128 _mmw_floor_ps(const __m128 &a) { return _mm_round_ps(a, _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC); }
+	FORCE_INLINE __m128 _mmw_ceil_ps(const __m128 &a) { return _mm_round_ps(a, _MM_FROUND_TO_POS_INF | _MM_FROUND_NO_EXC);	}
+	FORCE_INLINE __m128i _mmw_transpose_epi8(const __m128i &a)
 	{
 		const __m128i shuff = _mm_setr_epi8(0x0, 0x4, 0x8, 0xC, 0x1, 0x5, 0x9, 0xD, 0x2, 0x6, 0xA, 0xE, 0x3, 0x7, 0xB, 0xF);
 		return _mm_shuffle_epi8(a, shuff);
 	}
-	static FORCE_INLINE __m128i _mmw_sllv_ones(const __m128i &ishift)
+	FORCE_INLINE __m128i _mmw_sllv_ones(const __m128i &ishift)
 	{
 		__m128i shift = _mm_min_epi32(ishift, _mm_set1_epi32(32));
 
@@ -290,33 +290,33 @@ namespace MaskedOcclusionCullingSSE41
 
 namespace MaskedOcclusionCullingSSE2
 {
-	static FORCE_INLINE __m128i _mmw_mullo_epi32(const __m128i &a, const __m128i &b) 
+	FORCE_INLINE __m128i _mmw_mullo_epi32(const __m128i &a, const __m128i &b)
 	{ 
 		// Do products for even / odd lanes & merge the result
 		__m128i even = _mm_and_si128(_mm_mul_epu32(a, b), _mm_setr_epi32(~0, 0, ~0, 0));
 		__m128i odd = _mm_slli_epi64(_mm_mul_epu32(_mm_srli_epi64(a, 32), _mm_srli_epi64(b, 32)), 32);
 		return _mm_or_si128(even, odd);
 	}
-	static FORCE_INLINE __m128i _mmw_min_epi32(const __m128i &a, const __m128i &b) 
+	FORCE_INLINE __m128i _mmw_min_epi32(const __m128i &a, const __m128i &b)
 	{ 
 		__m128i cond = _mm_cmpgt_epi32(a, b);
 		return _mm_or_si128(_mm_andnot_si128(cond, a), _mm_and_si128(cond, b));
 	}
-	static FORCE_INLINE __m128i _mmw_max_epi32(const __m128i &a, const __m128i &b) 
+	FORCE_INLINE __m128i _mmw_max_epi32(const __m128i &a, const __m128i &b)
 	{ 
 		__m128i cond = _mm_cmpgt_epi32(b, a);
 		return _mm_or_si128(_mm_andnot_si128(cond, a), _mm_and_si128(cond, b));
 	}
-	static FORCE_INLINE int _mmw_testz_epi32(const __m128i &a, const __m128i &b) 
+	FORCE_INLINE int _mmw_testz_epi32(const __m128i &a, const __m128i &b)
 	{ 
 		return _mm_movemask_epi8(_mm_cmpeq_epi8(_mm_and_si128(a, b), _mm_setzero_si128())) == 0xFFFF;
 	}
-	static FORCE_INLINE __m128 _mmw_blendv_ps(const __m128 &a, const __m128 &b, const __m128 &c)
+	FORCE_INLINE __m128 _mmw_blendv_ps(const __m128 &a, const __m128 &b, const __m128 &c)
 	{	
 		__m128 cond = _mm_castsi128_ps(_mm_srai_epi32(_mm_castps_si128(c), 31));
 		return _mm_or_ps(_mm_andnot_ps(cond, a), _mm_and_ps(cond, b));
 	}
-	static FORCE_INLINE __m128 _mmx_dp4_ps(const __m128 &a, const __m128 &b)
+	FORCE_INLINE __m128 _mmx_dp4_ps(const __m128 &a, const __m128 &b)
 	{ 
 		// Product and two shuffle/adds pairs (similar to hadd_ps)
 		__m128 prod = _mm_mul_ps(a, b);
@@ -324,7 +324,7 @@ namespace MaskedOcclusionCullingSSE2
 		dp = _mm_add_ps(dp, _mm_shuffle_ps(dp, dp, _MM_SHUFFLE(0, 1, 2, 3)));
 		return dp;
 	}
-	static FORCE_INLINE __m128 _mmw_floor_ps(const __m128 &a) 
+	FORCE_INLINE __m128 _mmw_floor_ps(const __m128 &a)
 	{ 
 		int originalMode = _MM_GET_ROUNDING_MODE();
 		_MM_SET_ROUNDING_MODE(_MM_ROUND_DOWN);
@@ -332,7 +332,7 @@ namespace MaskedOcclusionCullingSSE2
 		_MM_SET_ROUNDING_MODE(originalMode);
 		return rounded;
 	}
-	static FORCE_INLINE __m128 _mmw_ceil_ps(const __m128 &a) 
+	FORCE_INLINE __m128 _mmw_ceil_ps(const __m128 &a)
 	{ 
 		int originalMode = _MM_GET_ROUNDING_MODE();
 		_MM_SET_ROUNDING_MODE(_MM_ROUND_UP);
@@ -340,7 +340,7 @@ namespace MaskedOcclusionCullingSSE2
 		_MM_SET_ROUNDING_MODE(originalMode);
 		return rounded;
 	}
-	static FORCE_INLINE __m128i _mmw_transpose_epi8(const __m128i &a)
+	FORCE_INLINE __m128i _mmw_transpose_epi8(const __m128i &a)
 	{
 		// Perform transpose through two 16->8 bit pack and byte shifts
 		__m128i res = a;
@@ -349,7 +349,7 @@ namespace MaskedOcclusionCullingSSE2
 		res = _mm_packus_epi16(_mm_and_si128(res, mask), _mm_srli_epi16(res, 8));
 		return res;
 	}
-	static FORCE_INLINE __m128i _mmw_sllv_ones(const __m128i &ishift)
+	FORCE_INLINE __m128i _mmw_sllv_ones(const __m128i &ishift)
 	{
 		__m128i shift = _mmw_min_epi32(ishift, _mm_set1_epi32(32));
 		

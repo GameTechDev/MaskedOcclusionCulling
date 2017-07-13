@@ -28,7 +28,7 @@
 
 	#define FORCE_INLINE __forceinline
 
-	static FORCE_INLINE unsigned long find_clear_lsb(unsigned int *mask)
+	FORCE_INLINE unsigned long find_clear_lsb(unsigned int *mask)
 	{
 		unsigned long idx;
 		_BitScanForward(&idx, *mask);
@@ -36,12 +36,12 @@
 		return idx;
 	}
 
-	static FORCE_INLINE void *aligned_alloc(size_t alignment, size_t size) 
+	FORCE_INLINE void *aligned_alloc(size_t alignment, size_t size)
 	{
 		return _aligned_malloc(size, alignment);
 	}
 
-	static FORCE_INLINE void aligned_free(void *ptr)
+	FORCE_INLINE void aligned_free(void *ptr)
 	{
 		_aligned_free(ptr);
 	}
@@ -54,7 +54,7 @@
 
 	#define FORCE_INLINE inline
 
-	static FORCE_INLINE unsigned long find_clear_lsb(unsigned int *mask)
+	FORCE_INLINE unsigned long find_clear_lsb(unsigned int *mask)
 	{
 		unsigned long idx;
 		idx = __builtin_ctzl(*mask);
@@ -62,17 +62,17 @@
 		return idx;
 	}
 
-	static FORCE_INLINE void aligned_free(void *ptr)
+	FORCE_INLINE void aligned_free(void *ptr)
 	{
 		free(ptr);
 	}
 
-	static FORCE_INLINE void __cpuidex(int* cpuinfo, int function, int subfunction)
+	FORCE_INLINE void __cpuidex(int* cpuinfo, int function, int subfunction)
 	{
 		__cpuid_count(function, subfunction, cpuinfo[0], cpuinfo[1], cpuinfo[2], cpuinfo[3]);
 	}
 
-	static FORCE_INLINE unsigned long long _xgetbv(unsigned int index)
+	FORCE_INLINE unsigned long long _xgetbv(unsigned int index)
 	{
 		unsigned int eax, edx;
 		__asm__ __volatile__(
