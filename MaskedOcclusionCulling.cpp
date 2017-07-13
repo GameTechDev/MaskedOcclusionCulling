@@ -29,13 +29,13 @@ static MaskedOcclusionCulling::Implementation DetectCPUFeatures()
 	__cpuidex(regs, 0, 0);
 	cpuId.resize(regs[0]);
 	for (size_t i = 0; i < cpuId.size(); ++i)
-		__cpuidex(cpuId[i].regs, i, 0);
+		__cpuidex(cpuId[i].regs, (int)i, 0);
 
 	// Get extended CPUID values
 	__cpuidex(regs, 0x80000000, 0);
 	cpuIdEx.resize(regs[0] - 0x80000000);
 	for (size_t i = 0; i < cpuIdEx.size(); ++i)
-		__cpuidex(cpuIdEx[i].regs, 0x80000000 + i, 0);
+		__cpuidex(cpuIdEx[i].regs, 0x80000000 + (int)i, 0);
 
 	#define TEST_BITS(A, B)            (((A) & (B)) == (B))
 	#define TEST_FMA_MOVE_OXSAVE       (cpuId.size() >= 1 && TEST_BITS(cpuId[1].regs[2], (1 << 12) | (1 << 22) | (1 << 27)))
