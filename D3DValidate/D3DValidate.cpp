@@ -305,7 +305,7 @@ int main(int argc, char* argv[])
 		if (pass)
 			nPassed++;
 		else
-			printf("Testing triangle %d... FALIED\n", i);
+			printf("Testing triangle %d... FAILED\n", i);
 
 		if (i % 100 == 0)
 			printf("Testing triangle %d\n", i);
