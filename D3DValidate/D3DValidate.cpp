@@ -13,7 +13,6 @@
 // License for the specific language governing permissions and limitations
 // under the License.
 ////////////////////////////////////////////////////////////////////////////////
-#define _USE_MATH_DEFINES
 #include <float.h>
 #include <stdio.h>
 #include <stdlib.h>

@@ -32,5 +32,8 @@
     <None Include="..\MaskedOcclusionCullingCommon.inl">
       <Filter>MaskedOcclusionCullingLibrary</Filter>
     </None>
+    <None Include="..\CompilerSpecific.inl">
+      <Filter>MaskedOcclusionCullingLibrary</Filter>
+    </None>
   </ItemGroup>
 </Project>

@@ -159,6 +159,7 @@
     <ClInclude Include="..\MaskedOcclusionCulling.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\CompilerSpecific.inl" />
     <None Include="..\MaskedOcclusionCullingCommon.inl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

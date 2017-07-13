@@ -157,6 +157,7 @@
     <ClCompile Include="D3DValidate.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\CompilerSpecific.inl" />
     <None Include="..\MaskedOcclusionCullingCommon.inl" />
   </ItemGroup>
   <ItemGroup>
