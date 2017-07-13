@@ -1,17 +1,18 @@
-/*
- * Copyright 2017 Intel Corporation
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http ://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and limitations under the License.
- */
+////////////////////////////////////////////////////////////////////////////////
+// Copyright 2017 Intel Corporation
+//
+// Licensed under the Apache License, Version 2.0 (the "License"); you may not
+// use this file except in compliance with the License.  You may obtain a copy
+// of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+// WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+// License for the specific language governing permissions and limitations
+// under the License.
+////////////////////////////////////////////////////////////////////////////////
 #include <new.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,6 +25,14 @@
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #ifdef _MSC_VER
+
+	#if defined(__AVX__) || defined(__AVX2__)
+		// For performance reasons, the MaskedOcclusionCullingAVX2.cpp file should be compiled with VEX encoding for SSE instructions (to avoid 
+		// AVX-SSE transition penalties, see https://software.intel.com/en-us/articles/avoiding-avx-sse-transition-penalties). However, the SSE
+		// version in MaskedOcclusionCulling.cpp _must_ be compiled without VEX encoding to allow backwards compatibility. Best practice is to 
+		// use lowest supported target platform (/arch:SSE2) as project default, and elevate only the MaskedOcclusionCullingAVX2.cpp file.
+		#error The MaskedOcclusionCulling.cpp should be compiled with lowest supported target platform, e.g. /arch:SSE2
+	#endif
 
 	#include <intrin.h>
 
@@ -46,8 +55,53 @@
 	{
 		_aligned_free(ptr);
 	}
-	
 #endif
+
+// Detect AVX2 / SSE4.1 support
+static MaskedOcclusionCulling::Implementation GetCPUInstructionSet()
+{
+	static bool initialized = false;
+	static MaskedOcclusionCulling::Implementation instructionSet = MaskedOcclusionCulling::SSE2;
+		
+	int cpui[4];
+	if (!initialized)
+	{
+		initialized = true;
+		instructionSet = MaskedOcclusionCulling::SSE2;
+	
+		int nIds, nExIds;
+		__cpuid(cpui, 0);
+		nIds = cpui[0];
+		__cpuid(cpui, 0x80000000);
+		nExIds = cpui[0];
+	
+		if (nIds >= 7 && nExIds >= 0x80000001)
+		{
+			// Test AVX2 support
+			instructionSet = MaskedOcclusionCulling::AVX2;
+			__cpuidex(cpui, 1, 0);
+			if ((cpui[2] & 0x18401000) != 0x18401000)
+				instructionSet = MaskedOcclusionCulling::SSE2;
+			__cpuidex(cpui, 7, 0);
+			if ((cpui[1] & 0x128) != 0x128)
+				instructionSet = MaskedOcclusionCulling::SSE2;
+			__cpuidex(cpui, 0x80000001, 0);
+			if ((cpui[2] & 0x20) != 0x20)
+				instructionSet = MaskedOcclusionCulling::SSE2;
+			if (instructionSet == MaskedOcclusionCulling::AVX2 && (_xgetbv(0) & 0x6) != 0x6)
+				instructionSet = MaskedOcclusionCulling::SSE2;
+		}
+		if (instructionSet == MaskedOcclusionCulling::SSE2 && nIds >= 1)
+		{
+			// Test SSE4.1 support
+			instructionSet = MaskedOcclusionCulling::SSE41;
+			__cpuidex(cpui, 1, 0);
+			if ((cpui[2] & 0x080000) != 0x080000)
+				instructionSet = MaskedOcclusionCulling::SSE2;
+		}
+	}
+	return instructionSet;
+}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Utility functions (not directly related to the algorithm/rasterizer)
