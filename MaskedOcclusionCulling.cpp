@@ -12,11 +12,51 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and limitations under the License.
  */
+#include <vector>
 #include <string.h>
 #include <assert.h>
 #include <float.h>
 #include "MaskedOcclusionCulling.h"
 #include "CompilerSpecific.inl"
+
+static MaskedOcclusionCulling::Implementation DetectCPUFeatures()
+{
+	struct CpuInfo { int regs[4]; };
+	std::vector<CpuInfo> cpuId, cpuIdEx;
+
+	// Get regular CPUID values
+	int regs[4];
+	__cpuidex(regs, 0, 0);
+	cpuId.resize(regs[0]);
+	for (size_t i = 0; i < cpuId.size(); ++i)
+		__cpuidex(cpuId[i].regs, i, 0);
+
+	// Get extended CPUID values
+	__cpuidex(regs, 0x80000000, 0);
+	cpuIdEx.resize(regs[0] - 0x80000000);
+	for (size_t i = 0; i < cpuIdEx.size(); ++i)
+		__cpuidex(cpuIdEx[i].regs, 0x80000000 + i, 0);
+
+	#define TEST_BITS(A, B)            (((A) & (B)) == (B))
+	#define TEST_FMA_MOVE_OXSAVE       (cpuId.size() >= 1 && TEST_BITS(cpuId[1].regs[2], (1 << 12) | (1 << 22) | (1 << 27)))
+	#define TEST_LZCNT                 (cpuIdEx.size() >= 1 && TEST_BITS(cpuIdEx[1].regs[2], 0x20))
+	#define TEST_SSE41                 (cpuId.size() >= 1 && TEST_BITS(cpuId[1].regs[2], (1 << 19)))
+	#define TEST_XMM_YMM               (cpuId.size() >= 1 && TEST_BITS(_xgetbv(0), (1 << 2) | (1 << 1)))
+	#define TEST_OPMASK_ZMM            (cpuId.size() >= 1 && TEST_BITS(_xgetbv(0), (1 << 7) | (1 << 6) | (1 << 5)))
+	#define TEST_BMI1_BMI2_AVX2        (cpuId.size() >= 7 && TEST_BITS(cpuId[7].regs[1], (1 << 3) | (1 << 5) | (1 << 8)))
+	#define TEST_AVX512_F_CD_DQ_BW_VL  (cpuId.size() >= 7 && TEST_BITS(cpuId[7].regs[1], (1 << 16) | (1 << 17) | (1 << 28) | (1 << 30) | (1 << 31)))
+
+	if (TEST_FMA_MOVE_OXSAVE && TEST_LZCNT && TEST_SSE41)
+	{
+		if (TEST_XMM_YMM && TEST_OPMASK_ZMM && TEST_BMI1_BMI2_AVX2 && TEST_AVX512_F_CD_DQ_BW_VL)
+			return MaskedOcclusionCulling::AVX512;
+		if (TEST_XMM_YMM && TEST_BMI1_BMI2_AVX2)
+			return MaskedOcclusionCulling::AVX2;
+	}
+	if (TEST_SSE41)
+		return MaskedOcclusionCulling::SSE41;
+	return MaskedOcclusionCulling::SSE2;
+}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Utility functions (not directly related to the algorithm/rasterizer)
@@ -227,35 +267,8 @@ namespace MaskedOcclusionCullingSSE41
 	// Utility function to create a new object using the allocator callbacks
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	static bool DetectSSE41()
-	{
-		static bool initialized = false;
-		static bool SSE41Supported = false;
-
-		int cpui[4];
-		if (!initialized)
-		{
-			initialized = true;
-
-			int nIds;
-			__cpuidex(cpui, 0, 0);
-			nIds = cpui[0];
-
-			if (nIds >= 1)
-			{
-				// Test SSE4.1 support
-				__cpuidex(cpui, 1, 0);
-				SSE41Supported = (cpui[2] & 0x080000) == 0x080000;
-			}
-		}
-		return SSE41Supported;
-	}
-
 	MaskedOcclusionCulling *CreateMaskedOcclusionCulling(pfnAlignedAlloc memAlloc, pfnAlignedFree memFree)
 	{
-		if (!DetectSSE41())
-			return nullptr;
-
 		MaskedOcclusionCullingPrivate *object = (MaskedOcclusionCullingPrivate *)memAlloc(32, sizeof(MaskedOcclusionCullingPrivate));
 		new (object) MaskedOcclusionCullingPrivate(memAlloc, memFree);
 		return object;
@@ -387,12 +400,14 @@ MaskedOcclusionCulling *MaskedOcclusionCulling::Create(pfnAlignedAlloc memAlloc,
 {
 	MaskedOcclusionCulling *object = nullptr;
 
+	MaskedOcclusionCulling::Implementation impl = DetectCPUFeatures();
+
 	// Return best supported version
-	if (object == nullptr)
+	if (object == nullptr && impl >= AVX512)
 		object = MaskedOcclusionCullingAVX512::CreateMaskedOcclusionCulling(memAlloc, memFree);	// Use AVX512 version
-	if (object == nullptr)
+	if (object == nullptr && impl >= AVX2)
 		object = MaskedOcclusionCullingAVX2::CreateMaskedOcclusionCulling(memAlloc, memFree);	// Use AVX2 version
-	if (object == nullptr)
+	if (object == nullptr && impl >= SSE41)
 		object = MaskedOcclusionCullingSSE41::CreateMaskedOcclusionCulling(memAlloc, memFree);	// Use SSE4.1 version
 	if (object == nullptr)
 		object = MaskedOcclusionCullingSSE2::CreateMaskedOcclusionCulling(memAlloc, memFree);	// Use SSE2 (slow) version

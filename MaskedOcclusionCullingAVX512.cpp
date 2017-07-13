@@ -19,7 +19,7 @@
 #include "CompilerSpecific.inl"
 
 // Make sure compiler supports AVX-512 intrinsics. 
-#if (defined(__INTEL_COMPILER) && __INTEL_COMPILER >= 1600) || (defined(__GNUC__) && __GNUC__ >= 5)
+#if (defined(__INTEL_COMPILER) && __INTEL_COMPILER >= 1600) || (defined(__GNUC__) && __GNUC__ >= 5) || (defined(__clang__) && __clang_major__ >= 4)
 
 #ifndef __AVX2__
 	#error For best performance, MaskedOcclusionCullingAVX512.cpp should be compiled with /arch:AVX2
@@ -39,7 +39,6 @@
 #define SIMD_SUB_TILE_COL_OFFSET_F _mm512_setr_ps(0, SUB_TILE_WIDTH, SUB_TILE_WIDTH * 2, SUB_TILE_WIDTH * 3, 0, SUB_TILE_WIDTH, SUB_TILE_WIDTH * 2, SUB_TILE_WIDTH * 3, 0, SUB_TILE_WIDTH, SUB_TILE_WIDTH * 2, SUB_TILE_WIDTH * 3, 0, SUB_TILE_WIDTH, SUB_TILE_WIDTH * 2, SUB_TILE_WIDTH * 3)
 #define SIMD_SUB_TILE_ROW_OFFSET_F _mm512_setr_ps(0, 0, 0, 0, SUB_TILE_HEIGHT, SUB_TILE_HEIGHT, SUB_TILE_HEIGHT, SUB_TILE_HEIGHT, SUB_TILE_HEIGHT * 2, SUB_TILE_HEIGHT * 2, SUB_TILE_HEIGHT * 2, SUB_TILE_HEIGHT * 2, SUB_TILE_HEIGHT * 3, SUB_TILE_HEIGHT * 3, SUB_TILE_HEIGHT * 3, SUB_TILE_HEIGHT * 3)
 
-//#define SIMD_SHUFFLE_SCANLINE_TO_SUBTILES _mm512_set_epi8(0xF, 0xB, 0x7, 0x3, 0xE, 0xA, 0x6, 0x2, 0xD, 0x9, 0x5, 0x1, 0xC, 0x8, 0x4, 0x0, 0xF, 0xB, 0x7, 0x3, 0xE, 0xA, 0x6, 0x2, 0xD, 0x9, 0x5, 0x1, 0xC, 0x8, 0x4, 0x0, 0xF, 0xB, 0x7, 0x3, 0xE, 0xA, 0x6, 0x2, 0xD, 0x9, 0x5, 0x1, 0xC, 0x8, 0x4, 0x0, 0xF, 0xB, 0x7, 0x3, 0xE, 0xA, 0x6, 0x2, 0xD, 0x9, 0x5, 0x1, 0xC, 0x8, 0x4, 0x0)
 #define SIMD_SHUFFLE_SCANLINE_TO_SUBTILES _mm512_set_epi32(0x0F0B0703, 0x0E0A0602, 0x0D090501, 0x0C080400, 0x0F0B0703, 0x0E0A0602, 0x0D090501, 0x0C080400, 0x0F0B0703, 0x0E0A0602, 0x0D090501, 0x0C080400, 0x0F0B0703, 0x0E0A0602, 0x0D090501, 0x0C080400)
 
 #define SIMD_LANE_YCOORD_I _mm512_setr_epi32(128, 384, 640, 896, 1152, 1408, 1664, 1920, 2176, 2432, 2688, 2944, 3200, 3456, 3712, 3968)
@@ -278,59 +277,8 @@ namespace MaskedOcclusionCullingAVX512
 	typedef MaskedOcclusionCulling::pfnAlignedAlloc            pfnAlignedAlloc;
 	typedef MaskedOcclusionCulling::pfnAlignedFree             pfnAlignedFree;
 
-	static bool DetectAVX512()
-	{
-		static bool initialized = false;
-		static bool AVX512Support = false;
-
-		int cpui[4];
-		if (!initialized)
-		{
-			initialized = true;
-			AVX512Support = false;
-
-			int nIds, nExIds;
-			__cpuidex(cpui, 0, 0);
-			nIds = cpui[0];
-			__cpuidex(cpui, 0x80000000, 0);
-			nExIds = cpui[0];
-
-			if (nIds >= 7 && nExIds >= (int)0x80000001)
-			{
-				AVX512Support = true;
-
-				// Check support for bit counter instructions (lzcnt)
-				__cpuidex(cpui, 0x80000001, 0);
-				if ((cpui[2] & 0x20) != 0x20)
-					AVX512Support = false;
-
-				// Check masks for misc instructions (FMA)
-				static const unsigned int FMA_MOVBE_OSXSAVE_MASK = (1 << 12) | (1 << 22) | (1 << 27);
-				__cpuidex(cpui, 1, 0);
-				if ((cpui[2] & FMA_MOVBE_OSXSAVE_MASK) != FMA_MOVBE_OSXSAVE_MASK)
-					AVX512Support = false;
-				
-				// Check XCR0 register to ensure that all registers are enabled (by OS)
-				static const unsigned int XCR0_MASK = (1 << 7) | (1 << 6) | (1 << 5) | (1 << 2) | (1 << 1); // OPMASK | ZMM0-15 | ZMM16-31 | XMM | YMM
-				if (AVX512Support && (_xgetbv(0) & XCR0_MASK) != XCR0_MASK)
-					AVX512Support = false;
-
-				// Detect AVX2 & AVX512 instruction sets
-				static const unsigned int AVX2_FLAGS = (1 << 3) | (1 << 5) | (1 << 8); // BMI1 (bit manipulation) | BMI2 (bit manipulation)| AVX2
-				static const unsigned int AVX512_FLAGS = AVX2_FLAGS | (1 << 16) | (1 << 17) | (1 << 30) | (1 << 31); // AVX512F | AVX512CD | AVX512BW | AVX512VL
-				__cpuidex(cpui, 7, 0);
-				if ((cpui[1] & AVX512_FLAGS) != AVX512_FLAGS)
-					AVX512Support = false;
-			}
-		}
-		return AVX512Support;
-	}
-
 	MaskedOcclusionCulling *CreateMaskedOcclusionCulling(pfnAlignedAlloc memAlloc, pfnAlignedFree memFree)
 	{
-		if (!DetectAVX512())
-			return nullptr;
-
 		MaskedOcclusionCullingPrivate *object = (MaskedOcclusionCullingPrivate *)memAlloc(64, sizeof(MaskedOcclusionCullingPrivate));
 		new (object) MaskedOcclusionCullingPrivate(memAlloc, memFree);
 		return object;

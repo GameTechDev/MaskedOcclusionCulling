@@ -206,58 +206,8 @@ namespace MaskedOcclusionCullingAVX2
 	typedef MaskedOcclusionCulling::pfnAlignedAlloc            pfnAlignedAlloc;
 	typedef MaskedOcclusionCulling::pfnAlignedFree             pfnAlignedFree;
 
-	static bool DetectAVX2()
-	{
-		static bool initialized = false;
-		static bool AVX2Support = false;
-
-		int cpui[4];
-		if (!initialized)
-		{
-			initialized = true;
-			AVX2Support = false;
-
-			int nIds, nExIds;
-			__cpuidex(cpui, 0, 0);
-			nIds = cpui[0];
-			__cpuidex(cpui, 0x80000000, 0);
-			nExIds = cpui[0];
-
-			if (nIds >= 7 && nExIds >= (int)0x80000001)
-			{
-				AVX2Support = true;
-
-				// Check support for bit counter instructions (lzcnt)
-				__cpuidex(cpui, 0x80000001, 0);
-				if ((cpui[2] & 0x20) != 0x20)
-					AVX2Support = false;
-
-				// Check masks for misc instructions (FMA)
-				static const unsigned int FMA_MOVBE_OSXSAVE_MASK = (1 << 12) | (1 << 22) | (1 << 27);
-				__cpuidex(cpui, 1, 0);
-				if ((cpui[2] & FMA_MOVBE_OSXSAVE_MASK) != FMA_MOVBE_OSXSAVE_MASK)
-					AVX2Support = false;
-
-				// Check XCR0 register to ensure that all registers are enabled (by OS)
-				static const unsigned int XCR0_MASK = (1 << 2) | (1 << 1); // XMM | YMM
-				if (AVX2Support && (_xgetbv(0) & XCR0_MASK) != XCR0_MASK)
-					AVX2Support = false;
-
-				// Detect AVX2 & AVX512 instruction sets
-				static const unsigned int AVX2_FLAGS = (1 << 3) | (1 << 5) | (1 << 8); // BMI1 (bit manipulation) | BMI2 (bit manipulation)| AVX2
-				__cpuidex(cpui, 7, 0);
-				if ((cpui[1] & AVX2_FLAGS) != AVX2_FLAGS)
-					AVX2Support = false;
-			}
-		}
-		return AVX2Support;
-	}
-
 	MaskedOcclusionCulling *CreateMaskedOcclusionCulling(pfnAlignedAlloc memAlloc, pfnAlignedFree memFree)
 	{
-		if (!DetectAVX2())
-			return nullptr;
-		
 		MaskedOcclusionCullingPrivate *object = (MaskedOcclusionCullingPrivate *)memAlloc(32, sizeof(MaskedOcclusionCullingPrivate));
 		new (object) MaskedOcclusionCullingPrivate(memAlloc, memFree);
 		return object;
