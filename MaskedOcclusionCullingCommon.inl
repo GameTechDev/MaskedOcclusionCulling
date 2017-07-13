@@ -528,26 +528,6 @@ public:
 		bbmaxY = _mmw_min_epi32(bbmaxY, _mmw_set1_epi32(scissor->mMaxY));
 	}
 
-	//template<typename T> FORCE_INLINE void SortVertices(T *vX, T *vY)
-	//{
-	//	// Rotate the triangle in the winding order until v0 is the vertex with lowest Y value
-	//	for (int i = 0; i < 2; i++)
-	//	{
-	//		T ey1 = vY[1] - vY[0];
-	//		T ey2 = vY[2] - vY[0];
-	//		__mw swapMask = (simd_cast<__mw>(ey1 | ey2) | simd_cast<__mw>(_mmw_cmpeq_epi32(simd_cast<__mwi>(ey2), SIMD_BITS_ZERO)));
-	//		T sX, sY;
-	//		sX = simd_cast<T>(_mmw_blendv_ps(simd_cast<__mw>(vX[2]), simd_cast<__mw>(vX[0]), swapMask));
-	//		vX[0] = simd_cast<T>(_mmw_blendv_ps(simd_cast<__mw>(vX[0]), simd_cast<__mw>(vX[1]), swapMask));
-	//		vX[1] = simd_cast<T>(_mmw_blendv_ps(simd_cast<__mw>(vX[1]), simd_cast<__mw>(vX[2]), swapMask));
-	//		vX[2] = sX;
-	//		sY = simd_cast<T>(_mmw_blendv_ps(simd_cast<__mw>(vY[2]), simd_cast<__mw>(vY[0]), swapMask));
-	//		vY[0] = simd_cast<T>(_mmw_blendv_ps(simd_cast<__mw>(vY[0]), simd_cast<__mw>(vY[1]), swapMask));
-	//		vY[1] = simd_cast<T>(_mmw_blendv_ps(simd_cast<__mw>(vY[1]), simd_cast<__mw>(vY[2]), swapMask));
-	//		vY[2] = sY;
-	//	}
-	//}
-
 	FORCE_INLINE void SortVertices(__mwi *vX, __mwi *vY)
 	{
 		// Rotate the triangle in the winding order until v0 is the vertex with lowest Y value
