@@ -407,6 +407,12 @@ void CullingThreadpool::SetNearClipPlane(float nearDist)
 	mMOC->SetNearClipPlane(nearDist);
 }
 
+void CullingThreadpool::SetBackfaceWinding(MaskedOcclusionCulling::BackfaceWinding winding)
+{
+	Flush(); // TODO: This function should preferably not cause a flush, should be moved to a state such as the matrix / vtx layout
+	mMOC->SetBackfaceWinding(winding);
+}
+
 void CullingThreadpool::SetMatrix(const float *modelToClipMatrix)
 {
 	// Treat nullptr matrix as a special case, otherwise copy the contents of the pointer and add to state

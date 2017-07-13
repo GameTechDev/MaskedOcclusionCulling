@@ -223,7 +223,7 @@ public:
 	void SetBuffer(MaskedOcclusionCulling *moc);
 
 	/*
-	 * \brief Changes the resolution of the occlusion buffer, see MaskedOcclusionCulling::SetResolution(). 
+	 * \brief Changes the resolution of the occlusion buffer, see MaskedOcclusionCulling::SetResolution().
 	 *        This method causes a Flush() to ensure that all unfinished rendering is completed.
 	 */
 	void SetResolution(unsigned int width, unsigned int height);
@@ -233,6 +233,13 @@ public:
 	 *        method causes a Flush() to ensure that all unfinished rendering is completed.
 	 */
 	void SetNearClipPlane(float nearDist);
+
+	/*!
+	* \brief Sets which triangle winding is considered to be backfacing. See 
+	*        MaskedOcclusionCulling::SetBackfaceWinding() for details. This method causes a Flush() to 
+	*        ensure that all unfinished rendering is completed.
+	*/
+	void SetBackfaceWinding(MaskedOcclusionCulling::BackfaceWinding winding);
 
 	/*
 	 * \brief Sets the model to clipspace transform matrix used for the RenderTriangles() and TestTriangles() 

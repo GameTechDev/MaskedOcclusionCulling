@@ -19,7 +19,7 @@ a library file. An alternative solution is to disable *whole program optimizatio
 
 Most inputs are given as clip space (x,y,w) coordinates assuming the same right handed coordinate system as used by DirectX and OpenGL (x positive right, y
 positive up and w positive in the view direction). Note that we use the clip space w coordinate for depth and disregard the z coordinate. Internally our
-masked hierarchical depth buffer stores *depth = 1 / w*. Backface culling is **always enabled**, with counterclockwise winding considered front-facing.
+masked hierarchical depth buffer stores *depth = 1 / w*. 
 
 The `TestRect()` function is an exception and instead accepts normalized device coordinates (NDC), *(x' = x/w, y' = y/w)*, where the visible screen region
 maps to the range [-1,1] for *x'* and *y'* (x positive right and y positive up). Again, this is consistent with both DirectX and OpenGL behavior.
@@ -157,12 +157,27 @@ float SoAVerts[] = {
 VertexLayout SoAVertexLayout(sizeof(float), 3 * sizeof(float), 6 * sizeof(float));
 
 // Render triangle with SoA layout
-moc.RenderTriangles((float*)SoAVerts, triIndices, 1, CLIP_PLANE_ALL, nullptr, SoAVertexLayout);
+moc.RenderTriangles((float*)SoAVerts, triIndices, 1, nullptr, CLIP_PLANE_ALL, nullptr, SoAVertexLayout);
 ```
 
 Vertex layout may affect occlusion culling performance. We have seen no large performance impact when using either SoA or AoS layout, but generally speaking the
 vertex position data should be packed as compactly into memory as possible to minimize number of cache misses. It is, for example, not advicable to bundle vertex
 position data together with normals, texture coordinates, etc. and using a large stride.
+
+**Backface culling** The `SetBackfaceWinding()` function can be used to configure which triangles should be backface culled. By default counter-clockwise
+winded triangles are considered frontfacing, and clockwise winded triangles are considered backfacing (`BACKFACE_CW`). You can use this feature to disable backface 
+culling when rendering two-sided occluders, by setting `SetBackfaceWinding(BACKFACE_NONE)`.
+
+```C++
+SetBackfaceWinding(BACKFACE_CW)
+// Render regular occluder geometry
+SetBackfaceWinding(BACKFACE_NONE)
+// Render two-sided occluder geometry
+SetBackfaceWinding(BACKFACE_CW)
+```
+
+Note that the backface winding affects the behavior of both the `RenderTriangles()` and `TestTriangles()` functions. The rasterization code only handles counter-clockwise
+winded triangles, so clockwise winded triangles are re-winded on the fly. Thus, culling modes other than `BACKFACE_CW` may incur a small performance penalty.
 
 ### Occlusion queries
 
