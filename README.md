@@ -358,10 +358,32 @@ of enabling multi-threading in a traditional single threaded application as the 
 a single threaded application. As previously mentioned we integrated this implementation in our interleaved BVH traversal algorithm (see the ["Masked Software Occlusion Culling"](https://software.intel.com/en-us/articles/masked-software-occlusion-culling)
 paper) and noted speedup of roughly *3x*, running on four threads, compared to our previous single threaded implementation.
 
+## Compiling
+
+The code has been reworked to support more platforms and compilers, such as [Intel C++ Compiler](https://software.intel.com/en-us/intel-compilers), [G++](https://gcc.gnu.org/) 
+and [LLVM/Clang](http://releases.llvm.org/download.html). The original Visual Studio 2015 projects remain and works with both ICC and Microsoft's compilers. Other compilers 
+are supported through [CMake](https://cmake.org/). See the `CMakeLists.txt` files in the `Example` and `FillrateTest` folders. You can use CMake to generate a 
+Visual Studio project for Clang on Windows:
+
+```
+md <path to library>\Example\Clang
+cd <path to library>\Example\Clang
+cmake -G"Visual Studio 14 2015 Win64" -T"LLVM-vs2014" ..
+```
+
+or build the library with G++/Clang on linux systems (for obvious reasons the `D3DValidate` sample only works on Windows)
+
+```
+mkdir <path to library>/Example/build
+cd <path to library>/Example/build
+cmake ..
+make
+```
+
 ## Version History
 
 * Version 1.3: 
-  * Added support for AVX-512 capable CPU's. Currently requires building the project using Intel's C++ compiler.
+  * Added support for AVX-512 and ICC/GCC/Clang support.
 * Version 1.2: 
   * Added support for threading, through a binning rasterizer. The `CullingThreadpool` class implements an example multi-threaded task system with a very similar 
     API to the `MaskedOcclusionCulling`class.
