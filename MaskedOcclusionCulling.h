@@ -65,7 +65,7 @@
  * Define PRECISE_COVERAGE to 1 to more closely match GPU rasterization rules. The increased precision comes
  * at a cost of slightly lower performance.
  */
-#define PRECISE_COVERAGE	1
+#define PRECISE_COVERAGE	0
 
 #endif
 
