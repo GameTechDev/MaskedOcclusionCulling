@@ -1,17 +1,18 @@
-/*
- * Copyright 2017 Intel Corporation
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http ://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and limitations under the License.
- */
+////////////////////////////////////////////////////////////////////////////////
+// Copyright 2017 Intel Corporation
+//
+// Licensed under the Apache License, Version 2.0 (the "License"); you may not
+// use this file except in compliance with the License.  You may obtain a copy
+// of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+// WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+// License for the specific language governing permissions and limitations
+// under the License.
+////////////////////////////////////////////////////////////////////////////////
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Common SIMD math utility functions
@@ -1106,7 +1107,7 @@ public:
 		xDiffi[0] = _mmw_sub_epi32(ipVtxX[0], _mmw_slli_epi32(bbPixelMinX, FP_BITS));
 		xDiffi[1] = _mmw_sub_epi32(midPixelX, _mmw_slli_epi32(bbPixelMinX, FP_BITS));
 		yDiffi[0] = _mmw_sub_epi32(ipVtxY[0], _mmw_slli_epi32(bbPixelMinY, FP_BITS));
-		yDiffi[1] = _mmw_sub_epi32(midPixelY, _mmw_slli_epi32(midTileY, FP_BITS + TILE_HEIGHT_SHIFT));
+		yDiffi[1] = _mmw_sub_epi32(midPixelY, _mmw_slli_epi32(bbMidTileY, FP_BITS + TILE_HEIGHT_SHIFT));
 
 		//////////////////////////////////////////////////////////////////////////////
 		// Edge slope setup - Note we do not conform to DX/GL rasterization rules

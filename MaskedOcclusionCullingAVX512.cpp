@@ -1,17 +1,18 @@
-/*
- * Copyright 2017 Intel Corporation
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http ://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and limitations under the License.
- */
+////////////////////////////////////////////////////////////////////////////////
+// Copyright 2017 Intel Corporation
+//
+// Licensed under the Apache License, Version 2.0 (the "License"); you may not
+// use this file except in compliance with the License.  You may obtain a copy
+// of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+// WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+// License for the specific language governing permissions and limitations
+// under the License.
+////////////////////////////////////////////////////////////////////////////////
 #include <string.h>
 #include <assert.h>
 #include <float.h>
@@ -21,6 +22,10 @@
 // Make sure compiler supports AVX-512 intrinsics. 
 #if (defined(__INTEL_COMPILER) && __INTEL_COMPILER >= 1600) || (defined(__clang__) && __clang_major__ >= 4) || (defined(__GNUC__) && __GNUC__ >= 5)
 
+// For performance reasons, the MaskedOcclusionCullingAVX512.cpp file should be compiled with VEX encoding for SSE instructions (to avoid 
+// AVX-SSE transition penalties, see https://software.intel.com/en-us/articles/avoiding-avx-sse-transition-penalties). However, the SSE
+// version in MaskedOcclusionCulling.cpp _must_ be compiled without VEX encoding to allow backwards compatibility. Best practice is to 
+// use lowest supported target platform (e.g. /arch:SSE2) as project default, and elevate only the MaskedOcclusionCullingAVX*.cpp files.
 #ifndef __AVX2__
 	#error For best performance, MaskedOcclusionCullingAVX512.cpp should be compiled with /arch:AVX2
 #endif
