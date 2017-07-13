@@ -371,7 +371,7 @@ cd <path to library>\Example\Clang
 cmake -G"Visual Studio 14 2015 Win64" -T"LLVM-vs2014" ..
 ```
 
-or build the library with G++/Clang on linux systems (for obvious reasons the `D3DValidate` sample only works on Windows)
+or build the library with G++/Clang on linux systems (the `D3DValidate` sample only works on Windows as it relies on Direct 3D)
 
 ```
 mkdir <path to library>/Example/build

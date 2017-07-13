@@ -12,7 +12,6 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and limitations under the License.
  */
-#define _USE_MATH_DEFINES
 #include <float.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,6 +28,9 @@
 std::mt19937 gRnd;
 std::uniform_real_distribution<float> gRndUniform(0, 1);
 
+#define F_PI 3.14159265358979323846f
+
+#ifdef _WIN32
 ////////////////////////////////////////////////////////////////////////////////////////
 // DX 11 setup & resource creation code
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -183,6 +185,38 @@ void D3DAddTriangles(float *verts, int nTris)
 	vBuffers.push_back(buf);
 }
 
+double BenchmarkTrianglesD3D(ID3D11Buffer *buf, int numTriangles, bool color)
+{
+	// set the render target as the back buffer
+	if (color)
+		context->OMSetRenderTargets(1, &textureRTV, textureDSV);
+	else
+		context->OMSetRenderTargets(0, nullptr, textureDSV);
+
+	// clear the back buffer to a deep blue
+	float clearColor[4] = { 0.0f, 1.0f, 0.0f, 1.0f };
+	context->ClearRenderTargetView(textureRTV, clearColor);
+	context->ClearDepthStencilView(textureDSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
+
+	// Setup primitivelist
+	UINT stride = sizeof(float) * 4, offset = 0;
+	context->IASetVertexBuffers(0, 1, &buf, &stride, &offset);
+	context->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	context->Flush();
+
+	// Draw triangles
+	auto before = std::chrono::high_resolution_clock::now();
+	context->Begin(endQuery);
+	context->Draw(numTriangles * 3, 0);
+	context->End(endQuery);
+	while (context->GetData(endQuery, nullptr, 0, 0) == S_FALSE) {}
+	auto after = std::chrono::high_resolution_clock::now();
+
+	return std::chrono::duration<double>(after - before).count();
+}
+
+#endif
+
 ////////////////////////////////////////////////////////////////////////////////////////
 // Simple random triangle rasterizer benchmark
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -201,7 +235,7 @@ void GenerateRandomTriangles(float *verts, unsigned int *triIdxBtF, int nTris, i
 		{
 			float vtx[3][3] = { { 0, 0, 1 },{ size * 2 / (float)width, 0, 1 },{ 0, size * 2 / (float)height, 1 } };
 			float offset[3] = { gRndUniform(gRnd)*2.0f - 1.0f, gRndUniform(gRnd)*2.0f - 1.0f, 0 };
-			float rotation = gRndUniform(gRnd) * 2 * (float)M_PI;
+			float rotation = gRndUniform(gRnd) * 2 * F_PI;
 
 			float myz = (float)(nTris - idx);
 			bool triOk = true;
@@ -251,36 +285,6 @@ double BenchmarkTrianglesThreaded(float *verts, unsigned int *tris, int numTrian
 	return std::chrono::duration<double>(after - before).count();
 }
 
-double BenchmarkTrianglesD3D(ID3D11Buffer *buf, int numTriangles, bool color)
-{
-	// set the render target as the back buffer
-	if (color)
-		context->OMSetRenderTargets(1, &textureRTV, textureDSV);
-	else
-		context->OMSetRenderTargets(0, nullptr, textureDSV);
-
-	// clear the back buffer to a deep blue
-	float clearColor[4] = { 0.0f, 1.0f, 0.0f, 1.0f };
-	context->ClearRenderTargetView(textureRTV, clearColor);
-	context->ClearDepthStencilView(textureDSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
-
-	// Setup primitivelist
-	UINT stride = sizeof(float) * 4, offset = 0;
-	context->IASetVertexBuffers(0, 1, &buf, &stride, &offset);
-	context->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	context->Flush();
-
-	// Draw triangles
-	auto before = std::chrono::high_resolution_clock::now();
-	context->Begin(endQuery);
-	context->Draw(numTriangles * 3, 0);
-	context->End(endQuery);
-	while (context->GetData(endQuery, nullptr, 0, 0) == S_FALSE) {}
-	auto after = std::chrono::high_resolution_clock::now();
-
-	return std::chrono::duration<double>(after - before).count();
-}
-
 ////////////////////////////////////////////////////////////////////////////////////////
 // Perform basic fillrate benchmarks for GPU and compare with this libray
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -294,8 +298,10 @@ int main(int argc, char* argv[])
 
 	MaskedOcclusionCulling *moc = MaskedOcclusionCulling::Create();
 
+#ifdef _WIN32
 	// Initialize directx
 	InitD3D(width, height);
+#endif
 
 	////////////////////////////////////////////////////////////////////////////////////////
 	// Setup and state related code
@@ -324,14 +330,16 @@ int main(int argc, char* argv[])
 		GenerateRandomTriangles(pVerts, pTrisBtF, numTriangles[i], sizes[i], 1024.0f, 1024.0f);
 		verts.push_back(pVerts);
 		trisBtF.push_back(pTrisBtF);
+#ifdef _WIN32
 		D3DAddTriangles(pVerts, numTriangles[i]);
+#endif
 		printf(".");
 	}
 
 	////////////////////////////////////////////////////////////////////////////////////////
 	// Perform benchmarks
 	////////////////////////////////////////////////////////////////////////////////////////
-
+#ifdef _WIN32
 	printf("\nD3D Z only\n");
 	printf("----\n");
 	for (int i = 0; i < numSizes; ++i)
@@ -342,6 +350,7 @@ int main(int argc, char* argv[])
 		double MTrisPerSecond = (double)numTriangles[i] / (1e6 * t);
 		printf("Tri: %3dx%3d - Time: %7.2f ms, MTris/s: %6.2f GPixels/s: %5.2f \n", size, size, t * 1000.0f, MTrisPerSecond, GPixelsPerSecond);
 	}
+#endif
 
 	printf("\n\nMasked single threaded\n");
 	printf("----\n");

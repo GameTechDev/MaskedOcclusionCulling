@@ -19,7 +19,7 @@
 #include "CompilerSpecific.inl"
 
 // Make sure compiler supports AVX-512 intrinsics. 
-#if (defined(__INTEL_COMPILER) && __INTEL_COMPILER >= 1600) || (defined(__GNUC__) && __GNUC__ >= 5) || (defined(__clang__) && __clang_major__ >= 4)
+#if (defined(__INTEL_COMPILER) && __INTEL_COMPILER >= 1600) || (defined(__clang__) && __clang_major__ >= 4) || (defined(__GNUC__) && __GNUC__ >= 5)
 
 #ifndef __AVX2__
 	#error For best performance, MaskedOcclusionCullingAVX512.cpp should be compiled with /arch:AVX2
