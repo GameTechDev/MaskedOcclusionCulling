@@ -78,51 +78,68 @@ typedef __m256i __mwi;
 #define mw_f32 m256_f32
 #define mw_i32 m256i_i32
 
-#define _mmw_set1_ps _mm256_set1_ps
-#define _mmw_setzero_ps _mm256_setzero_ps
-#define _mmw_andnot_ps _mm256_andnot_ps
-#define _mmw_fmadd_ps _mm256_fmadd_ps
-#define _mmw_fmsub_ps _mm256_fmsub_ps
-#define _mmw_min_ps _mm256_min_ps
-#define _mmw_max_ps _mm256_max_ps
-#define _mmw_movemask_ps _mm256_movemask_ps
-#define _mmw_blendv_ps _mm256_blendv_ps
-#define _mmw_cmpge_ps(a,b) _mm256_cmp_ps(a, b, _CMP_GE_OQ)
-#define _mmw_cmpgt_ps(a,b) _mm256_cmp_ps(a, b, _CMP_GT_OQ)
-#define _mmw_cmpeq_ps(a,b) _mm256_cmp_ps(a, b, _CMP_EQ_OQ)
-#define _mmw_floor_ps(x) _mm256_round_ps(x, _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC)
-#define _mmw_ceil_ps(x) _mm256_round_ps(x, _MM_FROUND_TO_POS_INF | _MM_FROUND_NO_EXC)
-#define _mmw_shuffle_ps _mm256_shuffle_ps
-#define _mmw_insertf32x4_ps _mm256_insertf128_ps
+#define _mmw_set1_ps              _mm256_set1_ps
+#define _mmw_setzero_ps           _mm256_setzero_ps
+#define _mmw_and_ps               _mm256_and_ps
+#define _mmw_or_ps                _mm256_or_ps
+#define _mmw_xor_ps               _mm256_xor_ps
+#define _mmw_not_ps(a)            _mm256_xor_ps((a), _mm256_castsi256_ps(_mm256_set1_epi32(~0)))
+#define _mmw_andnot_ps            _mm256_andnot_ps
+#define _mmw_neg_ps(a)            _mm256_xor_ps((a), _mm256_set1_ps(-0.0f))
+#define _mmw_abs_ps(a)            _mm256_and_ps((a), _mm256_castsi256_ps(_mm256_set1_epi32(0x7FFFFFFF)))
+#define _mmw_add_ps               _mm256_add_ps
+#define _mmw_sub_ps               _mm256_sub_ps
+#define _mmw_mul_ps               _mm256_mul_ps
+#define _mmw_div_ps               _mm256_div_ps
+#define _mmw_min_ps               _mm256_min_ps
+#define _mmw_max_ps               _mm256_max_ps
+#define _mmw_fmadd_ps             _mm256_fmadd_ps
+#define _mmw_fmsub_ps             _mm256_fmsub_ps
+#define _mmw_movemask_ps          _mm256_movemask_ps
+#define _mmw_blendv_ps            _mm256_blendv_ps
+#define _mmw_cmpge_ps(a,b)        _mm256_cmp_ps(a, b, _CMP_GE_OQ)
+#define _mmw_cmpgt_ps(a,b)        _mm256_cmp_ps(a, b, _CMP_GT_OQ)
+#define _mmw_cmpeq_ps(a,b)        _mm256_cmp_ps(a, b, _CMP_EQ_OQ)
+#define _mmw_floor_ps(x)          _mm256_round_ps(x, _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC)
+#define _mmw_ceil_ps(x)           _mm256_round_ps(x, _MM_FROUND_TO_POS_INF | _MM_FROUND_NO_EXC)
+#define _mmw_shuffle_ps           _mm256_shuffle_ps
+#define _mmw_insertf32x4_ps       _mm256_insertf128_ps
+#define _mmw_cvtepi32_ps          _mm256_cvtepi32_ps
+#define _mmw_blendv_epi32(a,b,c)  simd_cast<__mwi>(_mmw_blendv_ps(simd_cast<__mw>(a), simd_cast<__mw>(b), simd_cast<__mw>(c)))
 
-#define _mmw_set1_epi32 _mm256_set1_epi32
-#define _mmw_setzero_epi32 _mm256_setzero_si256
-#define _mmw_andnot_epi32 _mm256_andnot_si256
-#define _mmw_min_epi32 _mm256_min_epi32
-#define _mmw_max_epi32 _mm256_max_epi32
-#define _mmw_subs_epu16 _mm256_subs_epu16
-#define _mmw_mullo_epi32 _mm256_mullo_epi32
-#define _mmw_cmpeq_epi32 _mm256_cmpeq_epi32
-#define _mmw_testz_epi32 _mm256_testz_si256
-#define _mmw_cmpgt_epi32 _mm256_cmpgt_epi32
-#define _mmw_srai_epi32 _mm256_srai_epi32
-#define _mmw_srli_epi32 _mm256_srli_epi32
-#define _mmw_slli_epi32 _mm256_slli_epi32
-#define _mmw_sllv_ones(x) _mm256_sllv_epi32(SIMD_BITS_ONE, x)
-#define _mmw_transpose_epi8(x) _mm256_shuffle_epi8(x, SIMD_SHUFFLE_SCANLINE_TO_SUBTILES)
-#define _mmw_abs_epi32 _mm256_abs_epi32
+#define _mmw_set1_epi32           _mm256_set1_epi32
+#define _mmw_setzero_epi32        _mm256_setzero_si256
+#define _mmw_and_epi32            _mm256_and_si256
+#define _mmw_or_epi32             _mm256_or_si256
+#define _mmw_xor_epi32            _mm256_xor_si256
+#define _mmw_not_epi32(a)         _mm256_xor_si256((a), _mm256_set1_epi32(~0))
+#define _mmw_andnot_epi32         _mm256_andnot_si256
+#define _mmw_neg_epi32(a)         _mm256_sub_epi32(_mm256_set1_epi32(0), (a))
+#define _mmw_add_epi32            _mm256_add_epi32
+#define _mmw_sub_epi32            _mm256_sub_epi32
+#define _mmw_min_epi32            _mm256_min_epi32
+#define _mmw_max_epi32            _mm256_max_epi32
+#define _mmw_subs_epu16           _mm256_subs_epu16
+#define _mmw_mullo_epi32          _mm256_mullo_epi32
+#define _mmw_cmpeq_epi32          _mm256_cmpeq_epi32
+#define _mmw_testz_epi32          _mm256_testz_si256
+#define _mmw_cmpgt_epi32          _mm256_cmpgt_epi32
+#define _mmw_srai_epi32           _mm256_srai_epi32
+#define _mmw_srli_epi32           _mm256_srli_epi32
+#define _mmw_slli_epi32           _mm256_slli_epi32
+#define _mmw_sllv_ones(x)         _mm256_sllv_epi32(SIMD_BITS_ONE, x)
+#define _mmw_transpose_epi8(x)    _mm256_shuffle_epi8(x, SIMD_SHUFFLE_SCANLINE_TO_SUBTILES)
+#define _mmw_abs_epi32            _mm256_abs_epi32
+#define _mmw_cvtps_epi32          _mm256_cvtps_epi32
+#define _mmw_cvttps_epi32         _mm256_cvttps_epi32
 
-#define _mmw_cvtps_epi32 _mm256_cvtps_epi32
-#define _mmw_cvttps_epi32 _mm256_cvttps_epi32
-#define _mmw_cvtepi32_ps _mm256_cvtepi32_ps
-
-#define _mmx_dp4_ps(a, b) _mm_dp_ps(a, b, 0xFF)
-#define _mmx_fmadd_ps _mm_fmadd_ps
-#define _mmx_max_epi32 _mm_max_epi32
-#define _mmx_min_epi32 _mm_min_epi32
+#define _mmx_dp4_ps(a, b)         _mm_dp_ps(a, b, 0xFF)
+#define _mmx_fmadd_ps             _mm_fmadd_ps
+#define _mmx_max_epi32            _mm_max_epi32
+#define _mmx_min_epi32            _mm_min_epi32
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// SIMD math operators
+// SIMD casting functions
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 template<typename T, typename Y> FORCE_INLINE T simd_cast(Y A);
@@ -138,46 +155,6 @@ template<> FORCE_INLINE __m256  simd_cast<__m256>(__m256 A) { return A; }
 template<> FORCE_INLINE __m256i simd_cast<__m256i>(int A) { return _mm256_set1_epi32(A); }
 template<> FORCE_INLINE __m256i simd_cast<__m256i>(__m256 A) { return _mm256_castps_si256(A); }
 template<> FORCE_INLINE __m256i simd_cast<__m256i>(__m256i A) { return A; }
-
-// Unary operators
-static FORCE_INLINE __m128  operator-(const __m128  &A) { return _mm_xor_ps(A, _mm_set1_ps(-0.0f)); }
-static FORCE_INLINE __m128i operator-(const __m128i &A) { return _mm_sub_epi32(_mm_set1_epi32(0), A); }
-static FORCE_INLINE __m256  operator-(const __m256  &A) { return _mm256_xor_ps(A, _mm256_set1_ps(-0.0f)); }
-static FORCE_INLINE __m256i operator-(const __m256i &A) { return _mm256_sub_epi32(_mm256_set1_epi32(0), A); }
-static FORCE_INLINE __m128  operator~(const __m128  &A) { return _mm_xor_ps(A, _mm_castsi128_ps(_mm_set1_epi32(~0))); }
-static FORCE_INLINE __m128i operator~(const __m128i &A) { return _mm_xor_si128(A, _mm_set1_epi32(~0)); }
-static FORCE_INLINE __m256  operator~(const __m256  &A) { return _mm256_xor_ps(A, _mm256_castsi256_ps(_mm256_set1_epi32(~0))); }
-static FORCE_INLINE __m256i operator~(const __m256i &A) { return _mm256_xor_si256(A, _mm256_set1_epi32(~0)); }
-static FORCE_INLINE __m256 abs(const __m256 &a) { return _mm256_and_ps(a, _mm256_castsi256_ps(_mm256_set1_epi32(0x7FFFFFFF))); }
-static FORCE_INLINE __m128 abs(const __m128 &a) { return _mm_and_ps(a, _mm_castsi128_ps(_mm_set1_epi32(0x7FFFFFFF))); }
-
-// Binary operators
-#define SIMD_BINARY_OP(SIMD_TYPE, BASE_TYPE, prefix, postfix, func, op) \
-	static FORCE_INLINE SIMD_TYPE operator##op(const SIMD_TYPE &A, const SIMD_TYPE &B)		{ return _##prefix##_##func##_##postfix(A, B); } \
-	static FORCE_INLINE SIMD_TYPE operator##op(const SIMD_TYPE &A, const BASE_TYPE B)		{ return _##prefix##_##func##_##postfix(A, simd_cast<SIMD_TYPE>(B)); } \
-	static FORCE_INLINE SIMD_TYPE operator##op(const BASE_TYPE &A, const SIMD_TYPE &B)		{ return _##prefix##_##func##_##postfix(simd_cast<SIMD_TYPE>(A), B); } \
-	static FORCE_INLINE SIMD_TYPE &operator##op##=(SIMD_TYPE &A, const SIMD_TYPE &B)		{ return (A = _##prefix##_##func##_##postfix(A, B)); } \
-	static FORCE_INLINE SIMD_TYPE &operator##op##=(SIMD_TYPE &A, const BASE_TYPE B)			{ return (A = _##prefix##_##func##_##postfix(A, simd_cast<SIMD_TYPE>(B))); }
-
-#define ALL_SIMD_BINARY_OP(type_suffix, base_type, postfix, func, op) \
-	SIMD_BINARY_OP(__m128##type_suffix, base_type, mm, postfix, func, op) \
-	SIMD_BINARY_OP(__m256##type_suffix, base_type, mm256, postfix, func, op)
-
-ALL_SIMD_BINARY_OP(, float, ps, add, +)
-ALL_SIMD_BINARY_OP(, float, ps, sub, -)
-ALL_SIMD_BINARY_OP(, float, ps, mul, *)
-ALL_SIMD_BINARY_OP(, float, ps, div, / )
-ALL_SIMD_BINARY_OP(i, int, epi32, add, +)
-ALL_SIMD_BINARY_OP(i, int, epi32, sub, -)
-ALL_SIMD_BINARY_OP(, float, ps, and, &)
-ALL_SIMD_BINARY_OP(, float, ps, or , | )
-ALL_SIMD_BINARY_OP(, float, ps, xor, ^)
-SIMD_BINARY_OP(__m128i, int, mm, si128, and, &)
-SIMD_BINARY_OP(__m128i, int, mm, si128, or , | )
-SIMD_BINARY_OP(__m128i, int, mm, si128, xor, ^)
-SIMD_BINARY_OP(__m256i, int, mm256, si256, and, &)
-SIMD_BINARY_OP(__m256i, int, mm256, si256, or , | )
-SIMD_BINARY_OP(__m256i, int, mm256, si256, xor, ^)
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Specialized AVX input assembly function for general vertex gather 
@@ -224,15 +201,6 @@ static FORCE_INLINE void GatherVertices(__m256 *vtxX, __m256 *vtxY, __m256 *vtxW
 
 namespace MaskedOcclusionCullingAVX2
 {
-	static FORCE_INLINE __m256i _mmw_blendv_epi32(const __m256i &a, const __m256i &b, const __m256i &c) 
-	{
-		return _mm256_castps_si256(_mm256_blendv_ps(_mm256_castsi256_ps(a), _mm256_castsi256_ps(b), _mm256_castsi256_ps(c)));
-	}
-	static FORCE_INLINE __m256i _mmw_blendv_epi32(const __m256i &a, const __m256i &b, const __m256 &c) 
-	{
-		return _mm256_castps_si256(_mm256_blendv_ps(_mm256_castsi256_ps(a), _mm256_castsi256_ps(b), c));
-	}
-
 	static MaskedOcclusionCulling::Implementation gInstructionSet = MaskedOcclusionCulling::AVX2;
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

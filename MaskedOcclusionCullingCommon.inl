@@ -269,18 +269,18 @@ public:
 				outVtx[nout++] = p0;
 
 			// Edge intersects the clip plane if dist0 and dist1 have opposing signs
-			if (_mm_movemask_ps(dist0 ^ dist1))
+			if (_mm_movemask_ps(_mm_xor_ps(dist0, dist1)))
 			{
 				// Always clip from the positive side to avoid T-junctions
 				if (!dist0Neg)
 				{
-					__m128 t = dist0 / (dist0 - dist1);
-					outVtx[nout++] = _mmx_fmadd_ps(p1 - p0, t, p0);
+					__m128 t = _mm_div_ps(dist0, _mm_sub_ps(dist0, dist1));
+					outVtx[nout++] = _mmx_fmadd_ps(_mm_sub_ps(p1, p0), t, p0);
 				}
 				else
 				{
-					__m128 t = dist1 / (dist1 - dist0);
-					outVtx[nout++] = _mmx_fmadd_ps(p0 - p1, t, p1);
+					__m128 t = _mm_div_ps(dist1, _mm_sub_ps(dist1, dist0));
+					outVtx[nout++] = _mmx_fmadd_ps(_mm_sub_ps(p0, p1), t, p1);
 				}
 			}
 
@@ -303,17 +303,17 @@ public:
 		{
 			switch (CLIP_PLANE)
 			{
-			case ClipPlanes::CLIP_PLANE_LEFT:   planeDp[i] = vtxW[i] + vtxX[i]; break;
-			case ClipPlanes::CLIP_PLANE_RIGHT:  planeDp[i] = vtxW[i] - vtxX[i]; break;
-			case ClipPlanes::CLIP_PLANE_BOTTOM: planeDp[i] = vtxW[i] + vtxY[i]; break;
-			case ClipPlanes::CLIP_PLANE_TOP:    planeDp[i] = vtxW[i] - vtxY[i]; break;
-			case ClipPlanes::CLIP_PLANE_NEAR:   planeDp[i] = vtxW[i] - _mmw_set1_ps(mNearDist); break;
+			case ClipPlanes::CLIP_PLANE_LEFT:   planeDp[i] = _mmw_add_ps(vtxW[i], vtxX[i]); break;
+			case ClipPlanes::CLIP_PLANE_RIGHT:  planeDp[i] = _mmw_sub_ps(vtxW[i], vtxX[i]); break;
+			case ClipPlanes::CLIP_PLANE_BOTTOM: planeDp[i] = _mmw_add_ps(vtxW[i], vtxY[i]); break;
+			case ClipPlanes::CLIP_PLANE_TOP:    planeDp[i] = _mmw_sub_ps(vtxW[i], vtxY[i]); break;
+			case ClipPlanes::CLIP_PLANE_NEAR:   planeDp[i] = _mmw_sub_ps(vtxW[i], _mmw_set1_ps(mNearDist)); break;
 			}
 		}
 
 		// Look at FP sign and determine if tri is inside, outside or straddles the frustum plane
-		__mw inside = _mmw_andnot_ps(planeDp[0], _mmw_andnot_ps(planeDp[1], ~planeDp[2]));
-		__mw outside = planeDp[0] & planeDp[1] & planeDp[2];
+		__mw inside = _mmw_andnot_ps(planeDp[0], _mmw_andnot_ps(planeDp[1], _mmw_not_ps(planeDp[2])));
+		__mw outside = _mmw_and_ps(planeDp[0], _mmw_and_ps(planeDp[1], planeDp[2]));
 		unsigned int inMask = (unsigned int)_mmw_movemask_ps(inside);
 		unsigned int outMask = (unsigned int)_mmw_movemask_ps(outside);
 		straddleMask = (~outMask) & (~inMask);
@@ -413,11 +413,13 @@ public:
 		for (int i = 0; i < 3; i++)
 		{
 			int idx = vertexOrder[i];
-			__mw rcpW = _mmw_set1_ps(1.0f) / vtxW[i];
-			ipVtxX[idx] = _mmw_cvtps_epi32(_mmw_fmadd_ps(vtxX[i] * mHalfWidth, rcpW, mCenterX) * _mmw_set1_ps(float(1 << FP_BITS)));
-			ipVtxY[idx] = _mmw_cvtps_epi32(_mmw_fmadd_ps(vtxY[i] * mHalfHeight, rcpW, mCenterY) * _mmw_set1_ps(float(1 << FP_BITS)));
-			pVtxX[idx] = _mmw_cvtepi32_ps(ipVtxX[idx]) * _mmw_set1_ps(FP_INV);
-			pVtxY[idx] = _mmw_cvtepi32_ps(ipVtxY[idx]) * _mmw_set1_ps(FP_INV);
+			__mw rcpW = _mmw_div_ps(_mmw_set1_ps(1.0f), vtxW[i]);
+			__mw screenX = _mmw_fmadd_ps(_mmw_mul_ps(vtxX[i], mHalfWidth), rcpW, mCenterX);
+			__mw screenY = _mmw_fmadd_ps(_mmw_mul_ps(vtxY[i], mHalfHeight), rcpW, mCenterY);
+			ipVtxX[idx] = _mmw_cvtps_epi32(_mmw_mul_ps(screenX, _mmw_set1_ps(float(1 << FP_BITS))));
+			ipVtxY[idx] = _mmw_cvtps_epi32(_mmw_mul_ps(screenY, _mmw_set1_ps(float(1 << FP_BITS))));
+			pVtxX[idx] = _mmw_mul_ps(_mmw_cvtepi32_ps(ipVtxX[idx]), _mmw_set1_ps(FP_INV));
+			pVtxY[idx] = _mmw_mul_ps(_mmw_cvtepi32_ps(ipVtxY[idx]), _mmw_set1_ps(FP_INV));
 			pVtxZ[idx] = rcpW;
 		}
 	}
@@ -433,13 +435,13 @@ public:
 		for (int i = 0; i < 3; i++)
 		{
 			int idx = vertexOrder[i];
-			__mw rcpW = _mmw_set1_ps(1.0f) / vtxW[i];
+			__mw rcpW = _mmw_div_ps(_mmw_set1_ps(1.0f), vtxW[i]);
 
 			// The rounding modes are set to match HW rasterization with OpenGL. In practice our samples are placed
 			// in the (1,0) corner of each pixel, while HW rasterizer uses (0.5, 0.5). We get (1,0) because of the 
 			// floor used when interpolating along triangle edges. The rounding modes match an offset of (0.5, -0.5)
-			pVtxX[idx] = _mmw_ceil_ps(_mmw_fmadd_ps(vtxX[i] * mHalfWidth, rcpW, mCenterX));
-			pVtxY[idx] = _mmw_floor_ps(_mmw_fmadd_ps(vtxY[i] * mHalfHeight, rcpW, mCenterY));
+			pVtxX[idx] = _mmw_ceil_ps(_mmw_fmadd_ps(_mmw_mul_ps(vtxX[i], mHalfWidth), rcpW, mCenterX));
+			pVtxY[idx] = _mmw_floor_ps(_mmw_fmadd_ps(_mmw_mul_ps(vtxY[i], mHalfHeight), rcpW, mCenterY));
 			pVtxZ[idx] = rcpW;
 		}
 	}
@@ -506,28 +508,74 @@ public:
 		bbmaxY = _mmw_cvttps_epi32(_mmw_max_ps(vY[0], _mmw_max_ps(vY[1], vY[2])));
 
 		// Clamp to tile boundaries
-		bbminX = _mmw_max_epi32(bbminX & SIMD_PAD_W_MASK, _mmw_set1_epi32(scissor->mMinX));
-		bbmaxX = _mmw_min_epi32((bbmaxX + TILE_WIDTH) & SIMD_PAD_W_MASK, _mmw_set1_epi32(scissor->mMaxX));
-		bbminY = _mmw_max_epi32(bbminY & SIMD_PAD_H_MASK, _mmw_set1_epi32(scissor->mMinY));
-		bbmaxY = _mmw_min_epi32((bbmaxY + TILE_HEIGHT) & SIMD_PAD_H_MASK, _mmw_set1_epi32(scissor->mMaxY));
+		bbminX = _mmw_and_epi32(bbminX, SIMD_PAD_W_MASK);
+		bbmaxX = _mmw_and_epi32(_mmw_add_epi32(bbmaxX, _mmw_set1_epi32(TILE_WIDTH)), SIMD_PAD_W_MASK);
+		bbminY = _mmw_and_epi32(bbminY, SIMD_PAD_H_MASK);
+		bbmaxY = _mmw_and_epi32(_mmw_add_epi32(bbmaxY, _mmw_set1_epi32(TILE_HEIGHT)), SIMD_PAD_H_MASK);
+
+		// Clip to scissor
+		bbminX = _mmw_max_epi32(bbminX, _mmw_set1_epi32(scissor->mMinX));
+		bbmaxX = _mmw_min_epi32(bbmaxX, _mmw_set1_epi32(scissor->mMaxX));
+		bbminY = _mmw_max_epi32(bbminY, _mmw_set1_epi32(scissor->mMinY));
+		bbmaxY = _mmw_min_epi32(bbmaxY, _mmw_set1_epi32(scissor->mMaxY));
 	}
 
-	template<typename T> FORCE_INLINE void SortVertices(T *vX, T *vY)
+	//template<typename T> FORCE_INLINE void SortVertices(T *vX, T *vY)
+	//{
+	//	// Rotate the triangle in the winding order until v0 is the vertex with lowest Y value
+	//	for (int i = 0; i < 2; i++)
+	//	{
+	//		T ey1 = vY[1] - vY[0];
+	//		T ey2 = vY[2] - vY[0];
+	//		__mw swapMask = (simd_cast<__mw>(ey1 | ey2) | simd_cast<__mw>(_mmw_cmpeq_epi32(simd_cast<__mwi>(ey2), SIMD_BITS_ZERO)));
+	//		T sX, sY;
+	//		sX = simd_cast<T>(_mmw_blendv_ps(simd_cast<__mw>(vX[2]), simd_cast<__mw>(vX[0]), swapMask));
+	//		vX[0] = simd_cast<T>(_mmw_blendv_ps(simd_cast<__mw>(vX[0]), simd_cast<__mw>(vX[1]), swapMask));
+	//		vX[1] = simd_cast<T>(_mmw_blendv_ps(simd_cast<__mw>(vX[1]), simd_cast<__mw>(vX[2]), swapMask));
+	//		vX[2] = sX;
+	//		sY = simd_cast<T>(_mmw_blendv_ps(simd_cast<__mw>(vY[2]), simd_cast<__mw>(vY[0]), swapMask));
+	//		vY[0] = simd_cast<T>(_mmw_blendv_ps(simd_cast<__mw>(vY[0]), simd_cast<__mw>(vY[1]), swapMask));
+	//		vY[1] = simd_cast<T>(_mmw_blendv_ps(simd_cast<__mw>(vY[1]), simd_cast<__mw>(vY[2]), swapMask));
+	//		vY[2] = sY;
+	//	}
+	//}
+
+	FORCE_INLINE void SortVertices(__mwi *vX, __mwi *vY)
 	{
 		// Rotate the triangle in the winding order until v0 is the vertex with lowest Y value
 		for (int i = 0; i < 2; i++)
 		{
-			T ey1 = vY[1] - vY[0];
-			T ey2 = vY[2] - vY[0];
-			__mw swapMask = (simd_cast<__mw>(ey1 | ey2) | simd_cast<__mw>(_mmw_cmpeq_epi32(simd_cast<__mwi>(ey2), SIMD_BITS_ZERO)));
-			T sX, sY;
-			sX = simd_cast<T>(_mmw_blendv_ps(simd_cast<__mw>(vX[2]), simd_cast<__mw>(vX[0]), swapMask));
-			vX[0] = simd_cast<T>(_mmw_blendv_ps(simd_cast<__mw>(vX[0]), simd_cast<__mw>(vX[1]), swapMask));
-			vX[1] = simd_cast<T>(_mmw_blendv_ps(simd_cast<__mw>(vX[1]), simd_cast<__mw>(vX[2]), swapMask));
+			__mwi ey1 = _mmw_sub_epi32(vY[1], vY[0]);
+			__mwi ey2 = _mmw_sub_epi32(vY[2], vY[0]);
+			__mwi swapMask = _mmw_or_epi32(_mmw_or_epi32(ey1, ey2), _mmw_cmpeq_epi32(simd_cast<__mwi>(ey2), SIMD_BITS_ZERO));
+			__mwi sX, sY;
+			sX = _mmw_blendv_epi32(vX[2], vX[0], swapMask);
+			vX[0] = _mmw_blendv_epi32(vX[0], vX[1], swapMask);
+			vX[1] = _mmw_blendv_epi32(vX[1], vX[2], swapMask);
 			vX[2] = sX;
-			sY = simd_cast<T>(_mmw_blendv_ps(simd_cast<__mw>(vY[2]), simd_cast<__mw>(vY[0]), swapMask));
-			vY[0] = simd_cast<T>(_mmw_blendv_ps(simd_cast<__mw>(vY[0]), simd_cast<__mw>(vY[1]), swapMask));
-			vY[1] = simd_cast<T>(_mmw_blendv_ps(simd_cast<__mw>(vY[1]), simd_cast<__mw>(vY[2]), swapMask));
+			sY = _mmw_blendv_epi32(vY[2], vY[0], swapMask);
+			vY[0] = _mmw_blendv_epi32(vY[0], vY[1], swapMask);
+			vY[1] = _mmw_blendv_epi32(vY[1], vY[2], swapMask);
+			vY[2] = sY;
+		}
+	}
+
+	FORCE_INLINE void SortVertices(__mw *vX, __mw *vY)
+	{
+		// Rotate the triangle in the winding order until v0 is the vertex with lowest Y value
+		for (int i = 0; i < 2; i++)
+		{
+			__mw ey1 = _mmw_sub_ps(vY[1], vY[0]);
+			__mw ey2 = _mmw_sub_ps(vY[2], vY[0]);
+			__mw swapMask = _mmw_or_ps(_mmw_or_ps(ey1, ey2), simd_cast<__mw>(_mmw_cmpeq_epi32(simd_cast<__mwi>(ey2), SIMD_BITS_ZERO)));
+			__mw sX, sY;
+			sX = _mmw_blendv_ps(vX[2], vX[0], swapMask);
+			vX[0] = _mmw_blendv_ps(vX[0], vX[1], swapMask);
+			vX[1] = _mmw_blendv_ps(vX[1], vX[2], swapMask);
+			vX[2] = sX;
+			sY = _mmw_blendv_ps(vY[2], vY[0], swapMask);
+			vY[0] = _mmw_blendv_ps(vY[0], vY[1], swapMask);
+			vY[1] = _mmw_blendv_ps(vY[1], vY[2], swapMask);
 			vY[2] = sY;
 		}
 	}
@@ -535,15 +583,15 @@ public:
 	FORCE_INLINE void ComputeDepthPlane(const __mw *pVtxX, const __mw *pVtxY, const __mw *pVtxZ, __mw &zPixelDx, __mw &zPixelDy) const
 	{
 		// Setup z(x,y) = z0 + dx*x + dy*y screen space depth plane equation
-		__mw x2 = pVtxX[2] - pVtxX[0];
-		__mw x1 = pVtxX[1] - pVtxX[0];
-		__mw y1 = pVtxY[1] - pVtxY[0];
-		__mw y2 = pVtxY[2] - pVtxY[0];
-		__mw z1 = pVtxZ[1] - pVtxZ[0];
-		__mw z2 = pVtxZ[2] - pVtxZ[0];
-		__mw d = _mmw_set1_ps(1.0f) / _mmw_fmsub_ps(x1, y2, y1 * x2);
-		zPixelDx = _mmw_fmsub_ps(z1, y2, y1 * z2) * d;
-		zPixelDy = _mmw_fmsub_ps(x1, z2, z1 * x2) * d;
+		__mw x2 = _mmw_sub_ps(pVtxX[2], pVtxX[0]);
+		__mw x1 = _mmw_sub_ps(pVtxX[1], pVtxX[0]);
+		__mw y1 = _mmw_sub_ps(pVtxY[1], pVtxY[0]);
+		__mw y2 = _mmw_sub_ps(pVtxY[2], pVtxY[0]);
+		__mw z1 = _mmw_sub_ps(pVtxZ[1], pVtxZ[0]);
+		__mw z2 = _mmw_sub_ps(pVtxZ[2], pVtxZ[0]);
+		__mw d = _mmw_div_ps(_mmw_set1_ps(1.0f), _mmw_fmsub_ps(x1, y2, _mmw_mul_ps(y1, x2)));
+		zPixelDx = _mmw_mul_ps(_mmw_fmsub_ps(z1, y2, _mmw_mul_ps(y1, z2)), d);
+		zPixelDy = _mmw_mul_ps(_mmw_fmsub_ps(x1, z2, _mmw_mul_ps(z1, x2)), d);
 	}
 
 	FORCE_INLINE void UpdateTileQuick(int tileIdx, const __mwi &coverage, const __mw &zTriv)
@@ -561,17 +609,17 @@ public:
 		__mwi deadLane = _mmw_cmpeq_epi32(rastMask, SIMD_BITS_ZERO);
 
 		// Mask out all subtiles failing the depth test (don't update these subtiles)
-		deadLane |= _mmw_srai_epi32(simd_cast<__mwi>(zTriv - zMin[0]), 31);
+		deadLane = _mmw_or_epi32(deadLane, _mmw_srai_epi32(simd_cast<__mwi>(_mmw_sub_ps(zTriv, zMin[0])), 31));
 		rastMask = _mmw_andnot_epi32(deadLane, rastMask);
 
 		// Use distance heuristic to discard layer 1 if incoming triangle is significantly nearer to observer
 		// than the buffer contents. See Section 3.2 in "Masked Software Occlusion Culling"
 		__mwi coveredLane = _mmw_cmpeq_epi32(rastMask, SIMD_BITS_ONE);
-		__mw diff = _mmw_fmsub_ps(zMin[1], _mmw_set1_ps(2.0f), zTriv + zMin[0]);
-		__mwi discardLayerMask = _mmw_andnot_epi32(deadLane, _mmw_srai_epi32(simd_cast<__mwi>(diff), 31) | coveredLane);
+		__mw diff = _mmw_fmsub_ps(zMin[1], _mmw_set1_ps(2.0f), _mmw_add_ps(zTriv, zMin[0]));
+		__mwi discardLayerMask = _mmw_andnot_epi32(deadLane, _mmw_or_epi32(_mmw_srai_epi32(simd_cast<__mwi>(diff), 31), coveredLane));
 
 		// Update the mask with incoming triangle coverage
-		mask = _mmw_andnot_epi32(discardLayerMask, mask) | rastMask;
+		mask = _mmw_or_epi32(_mmw_andnot_epi32(discardLayerMask, mask), rastMask);
 
 		__mwi maskFull = _mmw_cmpeq_epi32(mask, SIMD_BITS_ONE);
 
@@ -598,16 +646,16 @@ public:
 		__mwi rastMask = _mmw_transpose_epi8(coverage);
 
 		// Perform individual depth tests with layer 0 & 1 and mask out all failing pixels 
-		__mw sdist0 = zMin[0] - zTriv;
-		__mw sdist1 = zMin[1] - zTriv;
+		__mw sdist0 = _mmw_sub_ps(zMin[0], zTriv);
+		__mw sdist1 = _mmw_sub_ps(zMin[1], zTriv);
 		__mwi sign0 = _mmw_srai_epi32(simd_cast<__mwi>(sdist0), 31);
 		__mwi sign1 = _mmw_srai_epi32(simd_cast<__mwi>(sdist1), 31);
-		__mwi triMask = rastMask & (_mmw_andnot_epi32(mask, sign0) | (mask & sign1));
+		__mwi triMask = _mmw_and_epi32(rastMask, _mmw_or_epi32(_mmw_andnot_epi32(mask, sign0), _mmw_and_epi32(mask, sign1)));
 
 		// Early out if no pixels survived the depth test (this test is more accurate than
 		// the early culling test in TraverseScanline())
 		__mwi t0 = _mmw_cmpeq_epi32(triMask, SIMD_BITS_ZERO);
-		__mwi t0inv = ~t0;
+		__mwi t0inv = _mmw_not_epi32(t0);
 		if (_mmw_testz_epi32(t0inv, t0inv))
 			return;
 
@@ -616,7 +664,7 @@ public:
 		__mw zTri = _mmw_blendv_ps(zTriv, zMin[0], simd_cast<__mw>(t0));
 
 		// Test if incoming triangle completely overwrites layer 0 or 1
-		__mwi layerMask0 = _mmw_andnot_epi32(triMask, ~mask);
+		__mwi layerMask0 = _mmw_andnot_epi32(triMask, _mmw_not_epi32(mask));
 		__mwi layerMask1 = _mmw_andnot_epi32(triMask, mask);
 		__mwi lm0 = _mmw_cmpeq_epi32(layerMask0, SIMD_BITS_ZERO);
 		__mwi lm1 = _mmw_cmpeq_epi32(layerMask1, SIMD_BITS_ZERO);
@@ -624,19 +672,19 @@ public:
 		__mw z1 = _mmw_blendv_ps(zMin[1], zTri, simd_cast<__mw>(lm1));
 
 		// Compute distances used for merging heuristic
-		__mw d0 = abs(sdist0);
-		__mw d1 = abs(sdist1);
-		__mw d2 = abs(z0 - z1);
+		__mw d0 = _mmw_abs_ps(sdist0);
+		__mw d1 = _mmw_abs_ps(sdist1);
+		__mw d2 = _mmw_abs_ps(_mmw_sub_ps(z0, z1));
 
 		// Find minimum distance
-		__mwi c01 = simd_cast<__mwi>(d0 - d1);
-		__mwi c02 = simd_cast<__mwi>(d0 - d2);
-		__mwi c12 = simd_cast<__mwi>(d1 - d2);
+		__mwi c01 = simd_cast<__mwi>(_mmw_sub_ps(d0, d1));
+		__mwi c02 = simd_cast<__mwi>(_mmw_sub_ps(d0, d2));
+		__mwi c12 = simd_cast<__mwi>(_mmw_sub_ps(d1, d2));
 		// Two tests indicating which layer the incoming triangle will merge with or 
 		// overwrite. d0min indicates that the triangle will overwrite layer 0, and 
 		// d1min flags that the triangle will overwrite layer 1.
-		__mwi d0min = (c01 & c02) | (lm0 | t0);
-		__mwi d1min = _mmw_andnot_epi32(d0min, c12 | lm1);
+		__mwi d0min = _mmw_or_epi32(_mmw_and_epi32(c01, c02), _mmw_or_epi32(lm0, t0));
+		__mwi d1min = _mmw_andnot_epi32(d0min, _mmw_or_epi32(c12, lm1));
 
 		///////////////////////////////////////////////////////////////////////////////
 		// Update depth buffer entry. NOTE: we always merge into layer 0, so if the 
@@ -652,7 +700,7 @@ public:
 		// merge with layer 1, merge with zTri or overwrite with layer 1 and then merge
 		// with zTri.
 		__mw e0 = _mmw_blendv_ps(z0, z1, simd_cast<__mw>(d1min));
-		__mw e1 = _mmw_blendv_ps(z1, zTri, simd_cast<__mw>(d1min | d0min));
+		__mw e1 = _mmw_blendv_ps(z1, zTri, simd_cast<__mw>(_mmw_or_epi32(d1min, d0min)));
 		zMin[0] = _mmw_min_ps(e0, e1);
 
 		// Update the zMin[1] value. There are three outcomes: keep current value,
@@ -668,11 +716,11 @@ public:
 		int eventOffset = leftOffset << TILE_WIDTH_SHIFT;
 		__mwi right[NRIGHT], left[NLEFT];
 		for (int i = 0; i < NRIGHT; ++i)
-			right[i] = _mmw_max_epi32(_mmw_srai_epi32(events[rightEvent + i], FP_BITS) - eventOffset, SIMD_BITS_ZERO);
+			right[i] = _mmw_max_epi32(_mmw_sub_epi32(_mmw_srai_epi32(events[rightEvent + i], FP_BITS), _mmw_set1_epi32(eventOffset)), SIMD_BITS_ZERO);
 		for (int i = 0; i < NLEFT; ++i)
-			left[i] = _mmw_max_epi32(_mmw_srai_epi32(events[leftEvent - i], FP_BITS) - eventOffset, SIMD_BITS_ZERO);
+			left[i] = _mmw_max_epi32(_mmw_sub_epi32(_mmw_srai_epi32(events[leftEvent - i], FP_BITS), _mmw_set1_epi32(eventOffset)), SIMD_BITS_ZERO);
 
-		__mw z0 = iz0 + zx*leftOffset;
+		__mw z0 = _mmw_add_ps(iz0, _mmw_set1_ps(zx*leftOffset));
 		int tileIdxEnd = tileIdx + rightOffset;
 		tileIdx += leftOffset;
 		for (;;)
@@ -693,13 +741,13 @@ public:
 			__mw zMin1 = _mmw_blendv_ps(mMaskedHiZBuffer[tileIdx].mZMin[1], mMaskedHiZBuffer[tileIdx].mZMin[0], simd_cast<__mw>(_mmw_cmpeq_epi32(mask, _mmw_setzero_epi32())));
 			__mw zMinBuf = _mmw_min_ps(zMin0, zMin1);
 #endif
-			__mw dist0 = zTriMax - zMinBuf;
+			__mw dist0 = _mmw_sub_ps(zTriMax, zMinBuf);
 			if (_mmw_movemask_ps(dist0) != SIMD_ALL_LANES_MASK)
 			{
 				// Compute coverage mask for entire 32xN using shift operations
 				__mwi accumulatedMask = _mmw_sllv_ones(left[0]);
 				for (int i = 1; i < NLEFT; ++i)
-					accumulatedMask = accumulatedMask & _mmw_sllv_ones(left[i]);
+					accumulatedMask = _mmw_and_epi32(accumulatedMask, _mmw_sllv_ones(left[i]));
 				for (int i = 0; i < NRIGHT; ++i)
 					accumulatedMask = _mmw_andnot_epi32(_mmw_sllv_ones(right[i]), accumulatedMask);
 
@@ -732,7 +780,7 @@ public:
 			tileIdx++;
 			if (tileIdx >= tileIdxEnd)
 				break;
-			z0 += zx;
+			z0 = _mmw_add_ps(z0, _mmw_set1_ps(zx));
 			for (int i = 0; i < NRIGHT; ++i)
 				right[i] = _mmw_subs_epu16(right[i], SIMD_TILE_WIDTH);	// Trick, use sub saturated to avoid checking against < 0 for shift (values should fit in 16 bits)
 			for (int i = 0; i < NLEFT; ++i)
@@ -761,10 +809,10 @@ public:
 		#define LEFT_EDGE_BIAS -1
 		#define RIGHT_EDGE_BIAS 1
 		#define UPDATE_TILE_EVENTS_Y(i) \
-				triEventRemainder[i] -= triSlopeTileRemainder[i]; \
+				triEventRemainder[i] = _mmw_sub_epi32(triEventRemainder[i], triSlopeTileRemainder[i]); \
 				__mwi overflow##i = _mmw_srai_epi32(triEventRemainder[i], 31); \
-				triEventRemainder[i] += overflow##i & triEdgeY[i]; \
-				triEvent[i] += triSlopeTileDelta[i] + (overflow##i & triSlopeSign[i])
+				triEventRemainder[i] = _mmw_add_epi32(triEventRemainder[i], _mmw_and_epi32(overflow##i, triEdgeY[i])); \
+				triEvent[i] = _mmw_add_epi32(triEvent[i], _mmw_add_epi32(triSlopeTileDelta[i], _mmw_and_epi32(overflow##i, triSlopeSign[i])))
 
 		__mwi triEvent[3], triSlopeSign[3], triSlopeTileDelta[3], triEdgeY[3], triSlopeTileRemainder[3], triEventRemainder[3];
 		for (int i = 0; i < 3; ++i)
@@ -779,19 +827,19 @@ public:
 			__mwi triStartRemainder = _mmw_set1_epi32(eventStartRemainder[i].mw_i32[triIdx]);
 			__mwi triEventStart = _mmw_set1_epi32(eventStart[i].mw_i32[triIdx]);
 
-			__mwi scanlineDelta = _mmw_cvttps_epi32(triSlope * SIMD_LANE_YCOORD_F);
-			__mwi scanlineSlopeRemainder = (_mmw_mullo_epi32(triAbsEdgeX, SIMD_LANE_YCOORD_I) - _mmw_mullo_epi32(_mmw_abs_epi32(scanlineDelta), triEdgeY[i]));
+			__mwi scanlineDelta = _mmw_cvttps_epi32(_mmw_mul_ps(triSlope, SIMD_LANE_YCOORD_F));
+			__mwi scanlineSlopeRemainder = _mmw_sub_epi32(_mmw_mullo_epi32(triAbsEdgeX, SIMD_LANE_YCOORD_I), _mmw_mullo_epi32(_mmw_abs_epi32(scanlineDelta), triEdgeY[i]));
 
-			triEventRemainder[i] = triStartRemainder - scanlineSlopeRemainder;
+			triEventRemainder[i] = _mmw_sub_epi32(triStartRemainder, scanlineSlopeRemainder);
 			__mwi overflow = _mmw_srai_epi32(triEventRemainder[i], 31);
-			triEventRemainder[i] += overflow & triEdgeY[i];
-			triEvent[i] = triEventStart + scanlineDelta + (overflow & triSlopeSign[i]);
+			triEventRemainder[i] = _mmw_add_epi32(triEventRemainder[i], _mmw_and_epi32(overflow, triEdgeY[i]));
+			triEvent[i] = _mmw_add_epi32(_mmw_add_epi32(triEventStart, scanlineDelta), _mmw_and_epi32(overflow, triSlopeSign[i]));
 		}
 
 #else
 		#define LEFT_EDGE_BIAS 0
 		#define RIGHT_EDGE_BIAS 0
-		#define UPDATE_TILE_EVENTS_Y(i)		triEvent[i] += triSlopeTileDelta[i];
+		#define UPDATE_TILE_EVENTS_Y(i)		triEvent[i] = _mmw_add_epi32(triEvent[i], triSlopeTileDelta[i]);
 
 		// Get deltas used to increment edge events each time we traverse one scanline of tiles
 		__mwi triSlopeTileDelta[3];
@@ -801,9 +849,9 @@ public:
 
 		// Setup edge events for first batch of SIMD_LANES scanlines
 		__mwi triEvent[3];
-		triEvent[0] = _mmw_set1_epi32(eventStart[0].mw_i32[triIdx]) + _mmw_mullo_epi32(SIMD_LANE_IDX, _mmw_set1_epi32(slope[0].mw_i32[triIdx]));
-		triEvent[1] = _mmw_set1_epi32(eventStart[1].mw_i32[triIdx]) + _mmw_mullo_epi32(SIMD_LANE_IDX, _mmw_set1_epi32(slope[1].mw_i32[triIdx]));
-		triEvent[2] = _mmw_set1_epi32(eventStart[2].mw_i32[triIdx]) + _mmw_mullo_epi32(SIMD_LANE_IDX, _mmw_set1_epi32(slope[2].mw_i32[triIdx]));
+		triEvent[0] = _mmw_add_epi32(_mmw_set1_epi32(eventStart[0].mw_i32[triIdx]), _mmw_mullo_epi32(SIMD_LANE_IDX, _mmw_set1_epi32(slope[0].mw_i32[triIdx])));
+		triEvent[1] = _mmw_add_epi32(_mmw_set1_epi32(eventStart[1].mw_i32[triIdx]), _mmw_mullo_epi32(SIMD_LANE_IDX, _mmw_set1_epi32(slope[1].mw_i32[triIdx])));
+		triEvent[2] = _mmw_add_epi32(_mmw_set1_epi32(eventStart[2].mw_i32[triIdx]), _mmw_mullo_epi32(SIMD_LANE_IDX, _mmw_set1_epi32(slope[2].mw_i32[triIdx])));
 #endif
 
 		// For big triangles track start & end tile for each scanline and only traverse the valid region
@@ -847,7 +895,7 @@ public:
 
 				// move to the next scanline of tiles, update edge events and interpolate z
 				tileRowIdx += mTilesWidth;
-				z0 += zy;
+				z0 = _mmw_add_ps(z0, _mmw_set1_ps(zy));
 				UPDATE_TILE_EVENTS_Y(0);
 				UPDATE_TILE_EVENTS_Y(2);
 			}
@@ -887,7 +935,7 @@ public:
 			if (tileRowIdx < tileEndRowIdx)
 			{
 				// move to the next scanline of tiles, update edge events and interpolate z
-				z0 += zy;
+				z0 = _mmw_add_ps(z0, _mmw_set1_ps(zy));
 				int i0 = MID_VTX_RIGHT + 0;
 				int i1 = MID_VTX_RIGHT + 1;
 				UPDATE_TILE_EVENTS_Y(i0);
@@ -914,7 +962,7 @@ public:
 					tileRowIdx += mTilesWidth;
 					if (tileRowIdx >= tileEndRowIdx)
 						break;
-					z0 += zy;
+					z0 = _mmw_add_ps(z0, _mmw_set1_ps(zy));
 					UPDATE_TILE_EVENTS_Y(i0);
 					UPDATE_TILE_EVENTS_Y(i1);
 				}
@@ -958,7 +1006,7 @@ public:
 					tileRowIdx += mTilesWidth;
 					if (tileRowIdx >= tileEndRowIdx)
 						break;
-					z0 += zy;
+					z0 = _mmw_add_ps(z0, _mmw_set1_ps(zy));
 					UPDATE_TILE_EVENTS_Y(i0);
 					UPDATE_TILE_EVENTS_Y(i1);
 				}
@@ -989,11 +1037,12 @@ public:
 		__mwi bbTileMinY = _mmw_srai_epi32(bbPixelMinY, TILE_HEIGHT_SHIFT);
 		__mwi bbTileMaxX = _mmw_srai_epi32(bbPixelMaxX, TILE_WIDTH_SHIFT);
 		__mwi bbTileMaxY = _mmw_srai_epi32(bbPixelMaxY, TILE_HEIGHT_SHIFT);
-		__mwi bbTileSizeX = bbTileMaxX - bbTileMinX;
-		__mwi bbTileSizeY = bbTileMaxY - bbTileMinY;
+		__mwi bbTileSizeX = _mmw_sub_epi32(bbTileMaxX, bbTileMinX);
+		__mwi bbTileSizeY = _mmw_sub_epi32(bbTileMaxY, bbTileMinY);
 
 		// Cull triangles with zero bounding box
-		triMask &= ~_mmw_movemask_ps(simd_cast<__mw>((bbTileSizeX - 1) | (bbTileSizeY - 1))) & SIMD_ALL_LANES_MASK;
+		__mwi bboxSign = _mmw_or_epi32(_mmw_sub_epi32(bbTileSizeX, _mmw_set1_epi32(1)), _mmw_sub_epi32(bbTileSizeY, _mmw_set1_epi32(1)));
+		triMask &= ~_mmw_movemask_ps(simd_cast<__mw>(bboxSign)) & SIMD_ALL_LANES_MASK;
 		if (triMask == 0x0)
 			return cullResult;
 
@@ -1008,15 +1057,21 @@ public:
 		ComputeDepthPlane(pVtxX, pVtxY, pVtxZ, zPixelDx, zPixelDy);
 
 		// Compute z value at min corner of bounding box. Offset to make sure z is conservative for all 8x4 subtiles
-		__mw bbMinXV0 = _mmw_cvtepi32_ps(bbPixelMinX) - pVtxX[0];
-		__mw bbMinYV0 = _mmw_cvtepi32_ps(bbPixelMinY) - pVtxY[0];
+		__mw bbMinXV0 = _mmw_sub_ps(_mmw_cvtepi32_ps(bbPixelMinX), pVtxX[0]);
+		__mw bbMinYV0 = _mmw_sub_ps(_mmw_cvtepi32_ps(bbPixelMinY), pVtxY[0]);
 		__mw zPlaneOffset = _mmw_fmadd_ps(zPixelDx, bbMinXV0, _mmw_fmadd_ps(zPixelDy, bbMinYV0, pVtxZ[0]));
-		__mw zTileDx = zPixelDx * _mmw_set1_ps((float)TILE_WIDTH);
-		__mw zTileDy = zPixelDy * _mmw_set1_ps((float)TILE_HEIGHT);
+		__mw zTileDx = _mmw_mul_ps(zPixelDx, _mmw_set1_ps((float)TILE_WIDTH));
+		__mw zTileDy = _mmw_mul_ps(zPixelDy, _mmw_set1_ps((float)TILE_HEIGHT));
 		if (TEST_Z)
-			zPlaneOffset += _mmw_max_ps(_mmw_setzero_ps(), zPixelDx*(float)SUB_TILE_WIDTH) + _mmw_max_ps(_mmw_setzero_ps(), zPixelDy*(float)SUB_TILE_HEIGHT);
+		{
+			zPlaneOffset = _mmw_add_ps(zPlaneOffset, _mmw_max_ps(_mmw_setzero_ps(), _mmw_mul_ps(zPixelDx, _mmw_set1_ps(SUB_TILE_WIDTH))));
+			zPlaneOffset = _mmw_add_ps(zPlaneOffset, _mmw_max_ps(_mmw_setzero_ps(), _mmw_mul_ps(zPixelDy, _mmw_set1_ps(SUB_TILE_HEIGHT))));
+		}
 		else
-			zPlaneOffset += _mmw_min_ps(_mmw_setzero_ps(), zPixelDx*(float)SUB_TILE_WIDTH) + _mmw_min_ps(_mmw_setzero_ps(), zPixelDy*(float)SUB_TILE_HEIGHT);
+		{
+			zPlaneOffset = _mmw_add_ps(zPlaneOffset, _mmw_min_ps(_mmw_setzero_ps(), _mmw_mul_ps(zPixelDx, _mmw_set1_ps(SUB_TILE_WIDTH))));
+			zPlaneOffset = _mmw_add_ps(zPlaneOffset, _mmw_min_ps(_mmw_setzero_ps(), _mmw_mul_ps(zPixelDy, _mmw_set1_ps(SUB_TILE_HEIGHT))));
+		}
 
 		// Compute Zmin and Zmax for the triangle (used to narrow the range for difficult tiles)
 		__mw zMin = _mmw_min_ps(pVtxZ[0], _mmw_min_ps(pVtxZ[1], pVtxZ[2]));
@@ -1030,11 +1085,11 @@ public:
 #if PRECISE_COVERAGE != 0
 
 		// Rotate the triangle in the winding order until v0 is the vertex with lowest Y value
-		SortVertices<__mwi>(ipVtxX, ipVtxY);
+		SortVertices(ipVtxX, ipVtxY);
 
 		// Compute edges
-		__mwi edgeX[3] = { ipVtxX[1] - ipVtxX[0], ipVtxX[2] - ipVtxX[1], ipVtxX[2] - ipVtxX[0] };
-		__mwi edgeY[3] = { ipVtxY[1] - ipVtxY[0], ipVtxY[2] - ipVtxY[1], ipVtxY[2] - ipVtxY[0] };
+		__mwi edgeX[3] = { _mmw_sub_epi32(ipVtxX[1], ipVtxX[0]), _mmw_sub_epi32(ipVtxX[2], ipVtxX[1]), _mmw_sub_epi32(ipVtxX[2], ipVtxX[0]) };
+		__mwi edgeY[3] = { _mmw_sub_epi32(ipVtxY[1], ipVtxY[0]), _mmw_sub_epi32(ipVtxY[2], ipVtxY[1]), _mmw_sub_epi32(ipVtxY[2], ipVtxY[0]) };
 
 		// Classify if the middle vertex is on the left or right and compute its position
 		int midVtxRight = ~_mmw_movemask_ps(simd_cast<__mw>(edgeY[1]));
@@ -1046,24 +1101,24 @@ public:
 		// Compute edge events for the bottom of the bounding box, or for the middle tile in case of 
 		// the edge originating from the middle vertex.
 		__mwi xDiffi[2], yDiffi[2];
-		xDiffi[0] = ipVtxX[0] - _mmw_slli_epi32(bbPixelMinX, FP_BITS);
-		xDiffi[1] = midPixelX - _mmw_slli_epi32(bbPixelMinX, FP_BITS);
-		yDiffi[0] = ipVtxY[0] - _mmw_slli_epi32(bbPixelMinY, FP_BITS);
-		yDiffi[1] = midPixelY - _mmw_slli_epi32(midTileY, FP_BITS + TILE_HEIGHT_SHIFT);
+		xDiffi[0] = _mmw_sub_epi32(ipVtxX[0], _mmw_slli_epi32(bbPixelMinX, FP_BITS));
+		xDiffi[1] = _mmw_sub_epi32(midPixelX, _mmw_slli_epi32(bbPixelMinX, FP_BITS));
+		yDiffi[0] = _mmw_sub_epi32(ipVtxY[0], _mmw_slli_epi32(bbPixelMinY, FP_BITS));
+		yDiffi[1] = _mmw_sub_epi32(midPixelY, _mmw_slli_epi32(midTileY, FP_BITS + TILE_HEIGHT_SHIFT));
 
 		//////////////////////////////////////////////////////////////////////////////
 		// Edge slope setup - Note we do not conform to DX/GL rasterization rules
 		//////////////////////////////////////////////////////////////////////////////
 
 		// Potentially flip edge to ensure that all edges have positive Y slope.
-		edgeX[1] = _mmw_blendv_epi32(edgeX[1], -edgeX[1], edgeY[1]);
+		edgeX[1] = _mmw_blendv_epi32(edgeX[1], _mmw_neg_epi32(edgeX[1]), edgeY[1]);
 		edgeY[1] = _mmw_abs_epi32(edgeY[1]);
 
 		// Compute floating point slopes
 		__mw slope[3];
-		slope[0] = _mmw_cvtepi32_ps(edgeX[0]) / _mmw_cvtepi32_ps(edgeY[0]);
-		slope[1] = _mmw_cvtepi32_ps(edgeX[1]) / _mmw_cvtepi32_ps(edgeY[1]);
-		slope[2] = _mmw_cvtepi32_ps(edgeX[2]) / _mmw_cvtepi32_ps(edgeY[2]);
+		slope[0] = _mmw_div_ps(_mmw_cvtepi32_ps(edgeX[0]), _mmw_cvtepi32_ps(edgeY[0]));
+		slope[1] = _mmw_div_ps(_mmw_cvtepi32_ps(edgeX[1]), _mmw_cvtepi32_ps(edgeY[1]));
+		slope[2] = _mmw_div_ps(_mmw_cvtepi32_ps(edgeX[2]), _mmw_cvtepi32_ps(edgeY[2]));
 
 		// Modify slope of horizontal edges to make sure they mask out pixels above/below the edge. The slope is set to screen
 		// width to mask out all pixels above or below the horizontal edge. We must also add a small bias to acount for that 
@@ -1072,11 +1127,13 @@ public:
 		__mwi horizontalSlope0 = _mmw_cmpeq_epi32(edgeY[0], _mmw_setzero_epi32());
 		__mwi horizontalSlope1 = _mmw_cmpeq_epi32(edgeY[1], _mmw_setzero_epi32());
 		slope[0] = _mmw_blendv_ps(slope[0], horizontalSlopeDelta, simd_cast<__mw>(horizontalSlope0));
-		slope[1] = _mmw_blendv_ps(slope[1], -horizontalSlopeDelta, simd_cast<__mw>(horizontalSlope1));
+		slope[1] = _mmw_blendv_ps(slope[1], _mmw_neg_ps(horizontalSlopeDelta), simd_cast<__mw>(horizontalSlope1));
 
 		__mwi vy[3] = { yDiffi[0], yDiffi[1], yDiffi[0] };
-		vy[0] = _mmw_blendv_epi32(yDiffi[0], ((yDiffi[0] + _mmw_set1_epi32(FP_HALF_PIXEL - 1)) & _mmw_set1_epi32((~0) << FP_BITS)), horizontalSlope0);
-		vy[1] = _mmw_blendv_epi32(yDiffi[1], ((yDiffi[1] + _mmw_set1_epi32(FP_HALF_PIXEL - 1)) & _mmw_set1_epi32((~0) << FP_BITS)), horizontalSlope1);
+		__mwi offset0 = _mmw_and_epi32(_mmw_add_epi32(yDiffi[0], _mmw_set1_epi32(FP_HALF_PIXEL - 1)), _mmw_set1_epi32((~0) << FP_BITS));
+		__mwi offset1 = _mmw_and_epi32(_mmw_add_epi32(yDiffi[1], _mmw_set1_epi32(FP_HALF_PIXEL - 1)), _mmw_set1_epi32((~0) << FP_BITS));
+		vy[0] = _mmw_blendv_epi32(yDiffi[0], offset0, horizontalSlope0);
+		vy[1] = _mmw_blendv_epi32(yDiffi[1], offset1, horizontalSlope1);
 
 		// Compute edge events for the bottom of the bounding box, or for the middle tile in case of 
 		// the edge originating from the middle vertex.
@@ -1091,31 +1148,33 @@ public:
 			// Delta and error term for one vertical tile step. The exact delta is exactDelta = edgeX / edgeY, due to limited precision we 
 			// repersent the delta as delta = qoutient + remainder / edgeY, where quotient = int(edgeX / edgeY). In this case, since we step 
 			// one tile of scanlines at a time, the slope is computed for a tile-sized step.
-			slopeTileDelta[i] = _mmw_cvttps_epi32(slope[i] * _mmw_set1_ps(FP_TILE_HEIGHT));
-			slopeTileRemainder[i] = _mmw_slli_epi32(absEdgeX[i], FP_TILE_HEIGHT_SHIFT) - _mmw_mullo_epi32(_mmw_abs_epi32(slopeTileDelta[i]), edgeY[i]);
+			slopeTileDelta[i] = _mmw_cvttps_epi32(_mmw_mul_ps(slope[i], _mmw_set1_ps(FP_TILE_HEIGHT)));
+			slopeTileRemainder[i] = _mmw_sub_epi32(_mmw_slli_epi32(absEdgeX[i], FP_TILE_HEIGHT_SHIFT), _mmw_mullo_epi32(_mmw_abs_epi32(slopeTileDelta[i]), edgeY[i]));
 
 			// Jump to bottom scanline of tile row, this is the bottom of the bounding box, or the middle vertex of the triangle.
 			// The jump can be in both positive and negative y-direction due to clipping / offscreen vertices.
-			__mwi tileStartDir = _mmw_blendv_epi32(slopeSign[i], -slopeSign[i], vy[i]);
+			__mwi tileStartDir = _mmw_blendv_epi32(slopeSign[i], _mmw_neg_epi32(slopeSign[i]), vy[i]);
 			__mwi tieBreaker = _mmw_blendv_epi32(_mmw_set1_epi32(0), _mmw_set1_epi32(1), tileStartDir);
-			__mwi tileStartSlope = _mmw_cvttps_epi32(slope[i] * _mmw_cvtepi32_ps(-vy[i]));
-			__mwi tileStartRemainder = (_mmw_mullo_epi32(absEdgeX[i], _mmw_abs_epi32(vy[i])) - _mmw_mullo_epi32(_mmw_abs_epi32(tileStartSlope), edgeY[i]));
+			__mwi tileStartSlope = _mmw_cvttps_epi32(_mmw_mul_ps(slope[i], _mmw_cvtepi32_ps(_mmw_neg_epi32(vy[i]))));
+			__mwi tileStartRemainder = _mmw_sub_epi32(_mmw_mullo_epi32(absEdgeX[i], _mmw_abs_epi32(vy[i])), _mmw_mullo_epi32(_mmw_abs_epi32(tileStartSlope), edgeY[i]));
 			
-			eventStartRemainder[i] = tileStartRemainder - tieBreaker;
+			eventStartRemainder[i] = _mmw_sub_epi32(tileStartRemainder, tieBreaker);
 			__mwi overflow = _mmw_srai_epi32(eventStartRemainder[i], 31);
-			eventStartRemainder[i] += overflow & edgeY[i];
-			eventStartRemainder[i] = _mmw_blendv_epi32(eventStartRemainder[i], edgeY[i] - eventStartRemainder[i] - _mmw_set1_epi32(1), vy[i]);
+			eventStartRemainder[i] = _mmw_add_epi32(eventStartRemainder[i], _mmw_and_epi32(overflow, edgeY[i]));
+			eventStartRemainder[i] = _mmw_blendv_epi32(eventStartRemainder[i], _mmw_sub_epi32(_mmw_sub_epi32(edgeY[i], eventStartRemainder[i]), _mmw_set1_epi32(1)), vy[i]);
 			
-			eventStart[i] = xDiffi[i & 1] + tileStartSlope + (overflow & tileStartDir) + _mmw_set1_epi32(FP_HALF_PIXEL - 1) + tieBreaker;
+			//eventStart[i] = xDiffi[i & 1] + tileStartSlope + (overflow & tileStartDir) + _mmw_set1_epi32(FP_HALF_PIXEL - 1) + tieBreaker;
+			eventStart[i] = _mmw_add_epi32(_mmw_add_epi32(xDiffi[i & 1], tileStartSlope), _mmw_and_epi32(overflow, tileStartDir));
+			eventStart[i] = _mmw_add_epi32(_mmw_add_epi32(eventStart[i], _mmw_set1_epi32(FP_HALF_PIXEL - 1)), tieBreaker);
 		}
 
 #else // PRECISE_COVERAGE
 
-		SortVertices<__mw>(pVtxX, pVtxY);
+		SortVertices(pVtxX, pVtxY);
 
 		// Compute edges
-		__mw edgeX[3] = { pVtxX[1] - pVtxX[0], pVtxX[2] - pVtxX[1], pVtxX[2] - pVtxX[0] };
-		__mw edgeY[3] = { pVtxY[1] - pVtxY[0], pVtxY[2] - pVtxY[1], pVtxY[2] - pVtxY[0] };
+		__mw edgeX[3] = { _mmw_sub_ps(pVtxX[1], pVtxX[0]), _mmw_sub_ps(pVtxX[2], pVtxX[1]), _mmw_sub_ps(pVtxX[2], pVtxX[0]) };
+		__mw edgeY[3] = { _mmw_sub_ps(pVtxY[1], pVtxY[0]), _mmw_sub_ps(pVtxY[2], pVtxY[1]), _mmw_sub_ps(pVtxY[2], pVtxY[0]) };
 
 		// Classify if the middle vertex is on the left or right and compute its position
 		int midVtxRight = ~_mmw_movemask_ps(edgeY[1]);
@@ -1130,28 +1189,28 @@ public:
 
 		// Compute floating point slopes
 		__mw slope[3];
-		slope[0] = edgeX[0] / edgeY[0];
-		slope[1] = edgeX[1] / edgeY[1];
-		slope[2] = edgeX[2] / edgeY[2];
+		slope[0] = _mmw_div_ps(edgeX[0], edgeY[0]);
+		slope[1] = _mmw_div_ps(edgeX[1], edgeY[1]);
+		slope[2] = _mmw_div_ps(edgeX[2], edgeY[2]);
 
 		// Modify slope of horizontal edges to make sure they mask out pixels above/below the edge. The slope is set to screen
 		// width to mask out all pixels above or below the horizontal edge. We must also add a small bias to acount for that 
 		// vertices may end up off screen due to clipping. We're assuming that the round off error is no bigger than 1.0
 		__mw horizontalSlopeDelta = _mmw_set1_ps((float)mWidth + 2.0f*(GUARD_BAND_PIXEL_SIZE + 1.0f));
 		slope[0] = _mmw_blendv_ps(slope[0], horizontalSlopeDelta, _mmw_cmpeq_ps(edgeY[0], _mmw_setzero_ps()));
-		slope[1] = _mmw_blendv_ps(slope[1], -horizontalSlopeDelta, _mmw_cmpeq_ps(edgeY[1], _mmw_setzero_ps()));
+		slope[1] = _mmw_blendv_ps(slope[1], _mmw_neg_ps(horizontalSlopeDelta), _mmw_cmpeq_ps(edgeY[1], _mmw_setzero_ps()));
 
 		// Convert floaing point slopes to fixed point
 		__mwi slopeFP[3];
-		slopeFP[0] = _mmw_cvttps_epi32(slope[0] * _mmw_set1_ps(1 << FP_BITS));
-		slopeFP[1] = _mmw_cvttps_epi32(slope[1] * _mmw_set1_ps(1 << FP_BITS));
-		slopeFP[2] = _mmw_cvttps_epi32(slope[2] * _mmw_set1_ps(1 << FP_BITS));
+		slopeFP[0] = _mmw_cvttps_epi32(_mmw_mul_ps(slope[0], _mmw_set1_ps(1 << FP_BITS)));
+		slopeFP[1] = _mmw_cvttps_epi32(_mmw_mul_ps(slope[1], _mmw_set1_ps(1 << FP_BITS)));
+		slopeFP[2] = _mmw_cvttps_epi32(_mmw_mul_ps(slope[2], _mmw_set1_ps(1 << FP_BITS)));
 
 		// Fan out edge slopes to avoid (rare) cracks at vertices. We increase right facing slopes 
 		// by 1 LSB, which results in overshooting vertices slightly, increasing triangle coverage. 
 		// e0 is always right facing, e1 depends on if the middle vertex is on the left or right
-		slopeFP[0] = slopeFP[0] + 1;
-		slopeFP[1] = slopeFP[1] + _mmw_srli_epi32(~simd_cast<__mwi>(edgeY[1]), 31);
+		slopeFP[0] = _mmw_add_epi32(slopeFP[0], _mmw_set1_epi32(1));
+		slopeFP[1] = _mmw_add_epi32(slopeFP[1], _mmw_srli_epi32(_mmw_not_epi32(simd_cast<__mwi>(edgeY[1])), 31));
 
 		// Compute slope deltas for an SIMD_LANES scanline step (tile height)
 		__mwi slopeTileDelta[3];
@@ -1162,24 +1221,24 @@ public:
 		// Compute edge events for the bottom of the bounding box, or for the middle tile in case of 
 		// the edge originating from the middle vertex.
 		__mwi xDiffi[2], yDiffi[2];
-		xDiffi[0] = _mmw_slli_epi32(_mmw_cvttps_epi32(pVtxX[0]) - bbPixelMinX, FP_BITS);
-		xDiffi[1] = _mmw_slli_epi32(_mmw_cvttps_epi32(midPixelX) - bbPixelMinX, FP_BITS);
-		yDiffi[0] = _mmw_cvttps_epi32(pVtxY[0]) - bbPixelMinY;
-		yDiffi[1] = _mmw_cvttps_epi32(midPixelY) - _mmw_slli_epi32(bbMidTileY, TILE_HEIGHT_SHIFT);
+		xDiffi[0] = _mmw_slli_epi32(_mmw_sub_epi32(_mmw_cvttps_epi32(pVtxX[0]), bbPixelMinX), FP_BITS);
+		xDiffi[1] = _mmw_slli_epi32(_mmw_sub_epi32(_mmw_cvttps_epi32(midPixelX), bbPixelMinX), FP_BITS);
+		yDiffi[0] = _mmw_sub_epi32(_mmw_cvttps_epi32(pVtxY[0]), bbPixelMinY);
+		yDiffi[1] = _mmw_sub_epi32(_mmw_cvttps_epi32(midPixelY), _mmw_slli_epi32(bbMidTileY, TILE_HEIGHT_SHIFT));
 
 		__mwi eventStart[3];
-		eventStart[0] = xDiffi[0] - _mmw_mullo_epi32(slopeFP[0], yDiffi[0]);
-		eventStart[1] = xDiffi[1] - _mmw_mullo_epi32(slopeFP[1], yDiffi[1]);
-		eventStart[2] = xDiffi[0] - _mmw_mullo_epi32(slopeFP[2], yDiffi[0]);
+		eventStart[0] = _mmw_sub_epi32(xDiffi[0], _mmw_mullo_epi32(slopeFP[0], yDiffi[0]));
+		eventStart[1] = _mmw_sub_epi32(xDiffi[1], _mmw_mullo_epi32(slopeFP[1], yDiffi[1]));
+		eventStart[2] = _mmw_sub_epi32(xDiffi[0], _mmw_mullo_epi32(slopeFP[2], yDiffi[0]));
 #endif
 
 		//////////////////////////////////////////////////////////////////////////////
 		// Split bounding box into bottom - middle - top region.
 		//////////////////////////////////////////////////////////////////////////////
 
-		__mwi bbBottomIdx = bbTileMinX + _mmw_mullo_epi32(bbTileMinY, _mmw_set1_epi32(mTilesWidth));
-		__mwi bbTopIdx = bbTileMinX + _mmw_mullo_epi32(bbTileMinY + bbTileSizeY, _mmw_set1_epi32(mTilesWidth));
-		__mwi bbMidIdx = bbTileMinX + _mmw_mullo_epi32(midTileY, _mmw_set1_epi32(mTilesWidth));
+		__mwi bbBottomIdx = _mmw_add_epi32(bbTileMinX, _mmw_mullo_epi32(bbTileMinY, _mmw_set1_epi32(mTilesWidth)));
+		__mwi bbTopIdx = _mmw_add_epi32(bbTileMinX, _mmw_mullo_epi32(_mmw_add_epi32(bbTileMinY, bbTileSizeY), _mmw_set1_epi32(mTilesWidth)));
+		__mwi bbMidIdx = _mmw_add_epi32(bbTileMinX, _mmw_mullo_epi32(midTileY, _mmw_set1_epi32(mTilesWidth)));
 
 		//////////////////////////////////////////////////////////////////////////////
 		// Loop over non-culled triangle and change SIMD axis to per-pixel
@@ -1353,9 +1412,9 @@ public:
 #endif
 
 			// Perform backface test. 
-			__mw triArea1 = (pVtxX[1] - pVtxX[0]) * (pVtxY[2] - pVtxY[0]);
-			__mw triArea2 = (pVtxX[0] - pVtxX[2]) * (pVtxY[0] - pVtxY[1]);
-			__mw triArea = triArea1 - triArea2;
+			__mw triArea1 = _mmw_mul_ps(_mmw_sub_ps(pVtxX[1], pVtxX[0]), _mmw_sub_ps(pVtxY[2], pVtxY[0]));
+			__mw triArea2 = _mmw_mul_ps(_mmw_sub_ps(pVtxX[0], pVtxX[2]), _mmw_sub_ps(pVtxY[0], pVtxY[1]));
+			__mw triArea = _mmw_sub_ps(triArea1, triArea2);
 			triMask &= _mmw_movemask_ps(_mmw_cmpgt_ps(triArea, _mmw_setzero_ps()));
 
 			if (triMask == 0x0)
@@ -1418,9 +1477,9 @@ public:
 		// Compute screen space bounding box and guard for out of bounds
 		//////////////////////////////////////////////////////////////////////////////
 #if USE_D3D != 0
-		__m128  pixelBBox = _mm_setr_ps(xmin, xmax, ymax, ymin) * mIHalfSize + mICenter;
+		__m128  pixelBBox = _mmx_fmadd_ps(_mm_setr_ps(xmin, xmax, ymax, ymin), mIHalfSize, mICenter);
 #else
-		__m128  pixelBBox = _mm_setr_ps(xmin, xmax, ymin, ymax) * mIHalfSize + mICenter;
+		__m128  pixelBBox = _mmx_fmadd_ps(_mm_setr_ps(xmin, xmax, ymin, ymax), mIHalfSize, mICenter);
 #endif
 		__m128i pixelBBoxi = _mm_cvttps_epi32(pixelBBox);
 		pixelBBoxi = _mmx_max_epi32(_mm_setzero_si128(), _mmx_min_epi32(mIScreenSize, pixelBBoxi));
@@ -1428,7 +1487,7 @@ public:
 		//////////////////////////////////////////////////////////////////////////////
 		// Pad bounding box to (32xN) tiles. Tile BB is used for looping / traversal
 		//////////////////////////////////////////////////////////////////////////////
-		__m128i tileBBoxi = (pixelBBoxi + SIMD_TILE_PAD) & SIMD_TILE_PAD_MASK;
+		__m128i tileBBoxi = _mm_and_si128(_mm_add_epi32(pixelBBoxi, SIMD_TILE_PAD), SIMD_TILE_PAD_MASK);
 		int txMin = tileBBoxi.m128i_i32[0] >> TILE_WIDTH_SHIFT;
 		int txMax = tileBBoxi.m128i_i32[1] >> TILE_WIDTH_SHIFT;
 		int tileRowIdx = (tileBBoxi.m128i_i32[2] >> TILE_HEIGHT_SHIFT)*mTilesWidth;
@@ -1440,21 +1499,21 @@ public:
 		///////////////////////////////////////////////////////////////////////////////
 		// Pad bounding box to (8x4) subtiles. Skip SIMD lanes outside the subtile BB
 		///////////////////////////////////////////////////////////////////////////////
-		__m128i subTileBBoxi = (pixelBBoxi + SIMD_SUB_TILE_PAD) & SIMD_SUB_TILE_PAD_MASK;
+		__m128i subTileBBoxi = _mm_and_si128(_mm_add_epi32(pixelBBoxi, SIMD_SUB_TILE_PAD), SIMD_SUB_TILE_PAD_MASK);
 		__mwi stxmin = _mmw_set1_epi32(subTileBBoxi.m128i_i32[0] - 1); // - 1 to be able to use GT test
 		__mwi stymin = _mmw_set1_epi32(subTileBBoxi.m128i_i32[2] - 1); // - 1 to be able to use GT test
 		__mwi stxmax = _mmw_set1_epi32(subTileBBoxi.m128i_i32[1]);
 		__mwi stymax = _mmw_set1_epi32(subTileBBoxi.m128i_i32[3]);
 
 		// Setup pixel coordinates used to discard lanes outside subtile BB
-		__mwi startPixelX = SIMD_SUB_TILE_COL_OFFSET + tileBBoxi.m128i_i32[0];
-		__mwi pixelY = SIMD_SUB_TILE_ROW_OFFSET + tileBBoxi.m128i_i32[2];
+		__mwi startPixelX = _mmw_add_epi32(SIMD_SUB_TILE_COL_OFFSET, _mmw_set1_epi32(tileBBoxi.m128i_i32[0]));
+		__mwi pixelY = _mmw_add_epi32(SIMD_SUB_TILE_ROW_OFFSET, _mmw_set1_epi32(tileBBoxi.m128i_i32[2]));
 
 		//////////////////////////////////////////////////////////////////////////////
 		// Compute z from w. Note that z is reversed order, 0 = far, 1 = near, which
 		// means we use a greater than test, so zMax is used to test for visibility.
 		//////////////////////////////////////////////////////////////////////////////
-		__mw zMax = _mmw_set1_ps(1.0f) / wmin;
+		__mw zMax = _mmw_div_ps(_mmw_set1_ps(1.0f), _mmw_set1_ps(wmin));
 
 		for (;;)
 		{
@@ -1479,10 +1538,10 @@ public:
 				__mwi zPass = simd_cast<__mwi>(_mmw_cmpge_ps(zMax, zBuf));	//zPass = zMax >= zBuf ? ~0 : 0
 
 				// Mask out lanes corresponding to subtiles outside the bounding box
-				__mwi bboxTestMin = _mmw_cmpgt_epi32(pixelX, stxmin) & _mmw_cmpgt_epi32(pixelY, stymin);
-				__mwi bboxTestMax = _mmw_cmpgt_epi32(stxmax, pixelX) & _mmw_cmpgt_epi32(stymax, pixelY);
-				__mwi boxMask = bboxTestMin & bboxTestMax;
-				zPass = zPass & boxMask;
+				__mwi bboxTestMin = _mmw_and_epi32(_mmw_cmpgt_epi32(pixelX, stxmin), _mmw_cmpgt_epi32(pixelY, stymin));
+				__mwi bboxTestMax = _mmw_and_epi32(_mmw_cmpgt_epi32(stxmax, pixelX), _mmw_cmpgt_epi32(stymax, pixelY));
+				__mwi boxMask = _mmw_and_epi32(bboxTestMin, bboxTestMax);
+				zPass = _mmw_and_epi32(zPass, boxMask);
 
 				// If not all tiles failed the conservative z test we can immediately terminate the test
 				if (!_mmw_testz_epi32(zPass, zPass))
@@ -1490,13 +1549,13 @@ public:
 
 				if (++tx >= txMax)
 					break;
-				pixelX += TILE_WIDTH;
+				pixelX = _mmw_add_epi32(pixelX, _mmw_set1_epi32(TILE_WIDTH));
 			}
 
 			tileRowIdx += mTilesWidth;
 			if (tileRowIdx >= tileRowIdxEnd)
 				break;
-			pixelY += TILE_HEIGHT;
+			pixelY = _mmw_add_epi32(pixelY, _mmw_set1_epi32(TILE_HEIGHT));
 		}
 
 		return CullingResult::OCCLUDED;
@@ -1605,9 +1664,9 @@ public:
 #endif
 
 			// Perform backface test. 
-			__mw triArea1 = (pVtxX[1] - pVtxX[0]) * (pVtxY[2] - pVtxY[0]);
-			__mw triArea2 = (pVtxX[0] - pVtxX[2]) * (pVtxY[0] - pVtxY[1]);
-			__mw triArea = triArea1 - triArea2;
+			__mw triArea1 = _mmw_mul_ps(_mmw_sub_ps(pVtxX[1], pVtxX[0]), _mmw_sub_ps(pVtxY[2], pVtxY[0]));
+			__mw triArea2 = _mmw_mul_ps(_mmw_sub_ps(pVtxX[0], pVtxX[2]), _mmw_sub_ps(pVtxY[0], pVtxY[1]));
+			__mw triArea = _mmw_sub_ps(triArea1, triArea2);
 			triMask &= _mmw_movemask_ps(_mmw_cmpgt_ps(triArea, _mmw_setzero_ps()));
 
 			if (triMask == 0x0)
@@ -1706,8 +1765,8 @@ public:
 
 			for (int v = 0; v < 3; ++v)
 			{
-				pVtxX[v] = _mmw_cvtepi32_ps(ipVtxX[v]) * _mmw_set1_ps(FP_INV);
-				pVtxY[v] = _mmw_cvtepi32_ps(ipVtxY[v]) * _mmw_set1_ps(FP_INV);
+				pVtxX[v] = _mmw_mul_ps(_mmw_cvtepi32_ps(ipVtxX[v]), _mmw_set1_ps(FP_INV));
+				pVtxY[v] = _mmw_mul_ps(_mmw_cvtepi32_ps(ipVtxY[v]), _mmw_set1_ps(FP_INV));
 			}
 
 			//////////////////////////////////////////////////////////////////////////////
