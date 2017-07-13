@@ -84,6 +84,24 @@ template<typename T> FORCE_INLINE T min(const T &a, const T &b) { return a < b ?
 #define SIMD_TILE_WIDTH     _mmw_set1_epi32(TILE_WIDTH)
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Vertex fetch utility function, need to be in global namespace due to template specialization
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+template<int N> FORCE_INLINE void VtxFetch4(__mw *v, const unsigned int *inTrisPtr, int triVtx, const float *inVtx, int numLanes)
+{
+	// Fetch 4 vectors (matching 1 sse part of the SIMD register), and continue to the next
+	const int ssePart = (SIMD_LANES / 4) - N;
+	for (int k = 0; k < 4; k++)
+	{
+		int lane = 4 * ssePart + k;
+		if (numLanes > lane)
+			v[k] = _mmw_insertf32x4_ps(v[k], _mm_loadu_ps(&inVtx[inTrisPtr[lane * 3 + triVtx] << 2]), ssePart);
+	}
+	VtxFetch4<N - 1>(v, inTrisPtr, triVtx, inVtx, numLanes);
+}
+template<> FORCE_INLINE void VtxFetch4<0>(__mw *v, const unsigned int *inTrisPtr, int triVtx, const float *inVtx, int numLanes) {}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Private class containing the implementation
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -154,9 +172,7 @@ public:
 #if PRECISE_COVERAGE == 0
 		// Test if combination of resolution & SLOPE_FP_BITS bits may cause 32-bit overflow. Note that the maximum resolution estimate
 		// is only an estimate (not conservative). It's advicable to stay well below the limit.
-		const unsigned int ESTIMATED_RES = ((1U << 31) - 1U) / ((1U << FP_BITS) 
-			* (TILE_HEIGHT + (unsigned int)(GUARD_BAND_PIXEL_SIZE + 1.0f))) - (2U * (unsigned int)(GUARD_BAND_PIXEL_SIZE + 1.0f));
-		assert(width < ESTIMATED_RES);
+		assert(width < ((1U << 31) - 1U) / ((1U << FP_BITS) * (TILE_HEIGHT + (unsigned int)(GUARD_BAND_PIXEL_SIZE + 1.0f))) - (2U * (unsigned int)(GUARD_BAND_PIXEL_SIZE + 1.0f)));
 #endif
 
 		// Delete current masked hierarchical Z buffer
@@ -346,7 +362,7 @@ public:
 			int bufIdx = 0;
 			int nClippedVerts = 3;
 			for (int i = 0; i < 3; i++)
-				vtxBuf[0][i] = _mm_setr_ps(vtxX[i].mw_f32[triIdx], vtxY[i].mw_f32[triIdx], vtxW[i].mw_f32[triIdx], 1.0f);
+				vtxBuf[0][i] = _mm_setr_ps(simd_f32(vtxX[i])[triIdx], simd_f32(vtxY[i])[triIdx], simd_f32(vtxW[i])[triIdx], 1.0f);
 
 			// Clip triangle with straddling planes. 
 			for (int i = 0; i < 5; ++i)
@@ -363,9 +379,9 @@ public:
 				// Write the first triangle back into the list of currently processed triangles
 				for (int i = 0; i < 3; i++)
 				{
-					vtxX[i].mw_f32[triIdx] = vtxBuf[bufIdx][i].m128_f32[0];
-					vtxY[i].mw_f32[triIdx] = vtxBuf[bufIdx][i].m128_f32[1];
-					vtxW[i].mw_f32[triIdx] = vtxBuf[bufIdx][i].m128_f32[2];
+					simd_f32(vtxX[i])[triIdx] = simd_f32(vtxBuf[bufIdx][i])[0];
+					simd_f32(vtxY[i])[triIdx] = simd_f32(vtxBuf[bufIdx][i])[1];
+					simd_f32(vtxW[i])[triIdx] = simd_f32(vtxBuf[bufIdx][i])[2];
 				}
 				// Write the remaining triangles into the clip buffer and process them next loop iteration
 				for (int i = 2; i < nClippedVerts - 1; i++)
@@ -450,20 +466,6 @@ public:
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Common SSE/AVX input assembly functions, note that there are specialized gathers for the general case in the SSE/AVX specific files
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	template<int N> FORCE_INLINE void VtxFetch4(__mw *v, const unsigned int *inTrisPtr, int triVtx, const float *inVtx, int numLanes)
-	{
-		// Fetch 4 vectors (matching 1 sse part of the SIMD register), and continue to the next
-		const int ssePart = (SIMD_LANES / 4) - N;
-		for (int k = 0; k < 4; k++)
-		{
-			int lane = 4 * ssePart + k;
-			if (numLanes > lane)
-				v[k] = _mmw_insertf32x4_ps(v[k], _mm_loadu_ps(&inVtx[inTrisPtr[lane * 3 + triVtx] << 2]), ssePart);
-		}
-		VtxFetch4<N - 1>(v, inTrisPtr, triVtx, inVtx, numLanes);
-	}
-	template<> FORCE_INLINE void VtxFetch4<0>(__mw *v, const unsigned int *inTrisPtr, int triVtx, const float *inVtx, int numLanes) {}
 
 	FORCE_INLINE void GatherVerticesFast(__mw *vtxX, __mw *vtxY, __mw *vtxW, const float *inVtx, const unsigned int *inTrisPtr, int numLanes)
 	{
@@ -817,15 +819,15 @@ public:
 		__mwi triEvent[3], triSlopeSign[3], triSlopeTileDelta[3], triEdgeY[3], triSlopeTileRemainder[3], triEventRemainder[3];
 		for (int i = 0; i < 3; ++i)
 		{
-			triSlopeSign[i] = _mmw_set1_epi32(slopeSign[i].mw_i32[triIdx]);
-			triSlopeTileDelta[i] = _mmw_set1_epi32(slopeTileDelta[i].mw_i32[triIdx]);
-			triEdgeY[i] = _mmw_set1_epi32(edgeY[i].mw_i32[triIdx]);
-			triSlopeTileRemainder[i] = _mmw_set1_epi32(slopeTileRemainder[i].mw_i32[triIdx]);
+			triSlopeSign[i] = _mmw_set1_epi32(simd_i32(slopeSign[i])[triIdx]);
+			triSlopeTileDelta[i] = _mmw_set1_epi32(simd_i32(slopeTileDelta[i])[triIdx]);
+			triEdgeY[i] = _mmw_set1_epi32(simd_i32(edgeY[i])[triIdx]);
+			triSlopeTileRemainder[i] = _mmw_set1_epi32(simd_i32(slopeTileRemainder[i])[triIdx]);
 
-			__mw triSlope = _mmw_set1_ps(slope[i].mw_f32[triIdx]);
-			__mwi triAbsEdgeX = _mmw_set1_epi32(absEdgeX[i].mw_i32[triIdx]);
-			__mwi triStartRemainder = _mmw_set1_epi32(eventStartRemainder[i].mw_i32[triIdx]);
-			__mwi triEventStart = _mmw_set1_epi32(eventStart[i].mw_i32[triIdx]);
+			__mw triSlope = _mmw_set1_ps(simd_f32(slope[i])[triIdx]);
+			__mwi triAbsEdgeX = _mmw_set1_epi32(simd_i32(absEdgeX[i])[triIdx]);
+			__mwi triStartRemainder = _mmw_set1_epi32(simd_i32(eventStartRemainder[i])[triIdx]);
+			__mwi triEventStart = _mmw_set1_epi32(simd_i32(eventStart[i])[triIdx]);
 
 			__mwi scanlineDelta = _mmw_cvttps_epi32(_mmw_mul_ps(triSlope, SIMD_LANE_YCOORD_F));
 			__mwi scanlineSlopeRemainder = _mmw_sub_epi32(_mmw_mullo_epi32(triAbsEdgeX, SIMD_LANE_YCOORD_I), _mmw_mullo_epi32(_mmw_abs_epi32(scanlineDelta), triEdgeY[i]));
@@ -843,32 +845,32 @@ public:
 
 		// Get deltas used to increment edge events each time we traverse one scanline of tiles
 		__mwi triSlopeTileDelta[3];
-		triSlopeTileDelta[0] = _mmw_set1_epi32(slopeTileDelta[0].mw_i32[triIdx]);
-		triSlopeTileDelta[1] = _mmw_set1_epi32(slopeTileDelta[1].mw_i32[triIdx]);
-		triSlopeTileDelta[2] = _mmw_set1_epi32(slopeTileDelta[2].mw_i32[triIdx]);
+		triSlopeTileDelta[0] = _mmw_set1_epi32(simd_i32(slopeTileDelta[0])[triIdx]);
+		triSlopeTileDelta[1] = _mmw_set1_epi32(simd_i32(slopeTileDelta[1])[triIdx]);
+		triSlopeTileDelta[2] = _mmw_set1_epi32(simd_i32(slopeTileDelta[2])[triIdx]);
 
 		// Setup edge events for first batch of SIMD_LANES scanlines
 		__mwi triEvent[3];
-		triEvent[0] = _mmw_add_epi32(_mmw_set1_epi32(eventStart[0].mw_i32[triIdx]), _mmw_mullo_epi32(SIMD_LANE_IDX, _mmw_set1_epi32(slope[0].mw_i32[triIdx])));
-		triEvent[1] = _mmw_add_epi32(_mmw_set1_epi32(eventStart[1].mw_i32[triIdx]), _mmw_mullo_epi32(SIMD_LANE_IDX, _mmw_set1_epi32(slope[1].mw_i32[triIdx])));
-		triEvent[2] = _mmw_add_epi32(_mmw_set1_epi32(eventStart[2].mw_i32[triIdx]), _mmw_mullo_epi32(SIMD_LANE_IDX, _mmw_set1_epi32(slope[2].mw_i32[triIdx])));
+		triEvent[0] = _mmw_add_epi32(_mmw_set1_epi32(simd_i32(eventStart[0])[triIdx]), _mmw_mullo_epi32(SIMD_LANE_IDX, _mmw_set1_epi32(simd_i32(slope[0])[triIdx])));
+		triEvent[1] = _mmw_add_epi32(_mmw_set1_epi32(simd_i32(eventStart[1])[triIdx]), _mmw_mullo_epi32(SIMD_LANE_IDX, _mmw_set1_epi32(simd_i32(slope[1])[triIdx])));
+		triEvent[2] = _mmw_add_epi32(_mmw_set1_epi32(simd_i32(eventStart[2])[triIdx]), _mmw_mullo_epi32(SIMD_LANE_IDX, _mmw_set1_epi32(simd_i32(slope[2])[triIdx])));
 #endif
 
 		// For big triangles track start & end tile for each scanline and only traverse the valid region
 		int startDelta, endDelta, topDelta, startEvent, endEvent, topEvent;
 		if (TIGHT_TRAVERSAL)
 		{
-			startDelta = slopeTileDelta[2].mw_i32[triIdx] + LEFT_EDGE_BIAS;
-			endDelta = slopeTileDelta[0].mw_i32[triIdx] + RIGHT_EDGE_BIAS;
-			topDelta = slopeTileDelta[1].mw_i32[triIdx] + (MID_VTX_RIGHT ? RIGHT_EDGE_BIAS : LEFT_EDGE_BIAS);
+			startDelta = simd_i32(slopeTileDelta[2])[triIdx] + LEFT_EDGE_BIAS;
+			endDelta = simd_i32(slopeTileDelta[0])[triIdx] + RIGHT_EDGE_BIAS;
+			topDelta = simd_i32(slopeTileDelta[1])[triIdx] + (MID_VTX_RIGHT ? RIGHT_EDGE_BIAS : LEFT_EDGE_BIAS);
 
 			// Compute conservative bounds for the edge events over a 32xN tile
-			startEvent = eventStart[2].mw_i32[triIdx] + min(0, startDelta);
-			endEvent = eventStart[0].mw_i32[triIdx] + max(0, endDelta) + (TILE_WIDTH << FP_BITS);
+			startEvent = simd_i32(eventStart[2])[triIdx] + min(0, startDelta);
+			endEvent = simd_i32(eventStart[0])[triIdx] + max(0, endDelta) + (TILE_WIDTH << FP_BITS);
 			if (MID_VTX_RIGHT)
-				topEvent = eventStart[1].mw_i32[triIdx] + max(0, topDelta) + (TILE_WIDTH << FP_BITS);
+				topEvent = simd_i32(eventStart[1])[triIdx] + max(0, topDelta) + (TILE_WIDTH << FP_BITS);
 			else
-				topEvent = eventStart[1].mw_i32[triIdx] + min(0, topDelta);
+				topEvent = simd_i32(eventStart[1])[triIdx] + min(0, topDelta);
 		}
 
 		if (tileRowIdx <= tileMidRowIdx)
@@ -1249,21 +1251,21 @@ public:
 			int triMidVtxRight = (midVtxRight >> triIdx) & 1;
 
 			// Get Triangle Zmin zMax
-			__mw zTriMax = _mmw_set1_ps(zMax.mw_f32[triIdx]);
-			__mw zTriMin = _mmw_set1_ps(zMin.mw_f32[triIdx]);
+			__mw zTriMax = _mmw_set1_ps(simd_f32(zMax)[triIdx]);
+			__mw zTriMin = _mmw_set1_ps(simd_f32(zMin)[triIdx]);
 
 			// Setup Zmin value for first set of 8x4 subtiles
-			__mw z0 = _mmw_fmadd_ps(_mmw_set1_ps(zPixelDx.mw_f32[triIdx]), SIMD_SUB_TILE_COL_OFFSET_F,
-				_mmw_fmadd_ps(_mmw_set1_ps(zPixelDy.mw_f32[triIdx]), SIMD_SUB_TILE_ROW_OFFSET_F, _mmw_set1_ps(zPlaneOffset.mw_f32[triIdx])));
-			float zx = zTileDx.mw_f32[triIdx];
-			float zy = zTileDy.mw_f32[triIdx];
+			__mw z0 = _mmw_fmadd_ps(_mmw_set1_ps(simd_f32(zPixelDx)[triIdx]), SIMD_SUB_TILE_COL_OFFSET_F,
+				_mmw_fmadd_ps(_mmw_set1_ps(simd_f32(zPixelDy)[triIdx]), SIMD_SUB_TILE_ROW_OFFSET_F, _mmw_set1_ps(simd_f32(zPlaneOffset)[triIdx])));
+			float zx = simd_f32(zTileDx)[triIdx];
+			float zy = simd_f32(zTileDy)[triIdx];
 
 			// Get dimension of bounding box bottom, mid & top segments
-			int bbWidth = bbTileSizeX.mw_i32[triIdx];
-			int bbHeight = bbTileSizeY.mw_i32[triIdx];
-			int tileRowIdx = bbBottomIdx.mw_i32[triIdx];
-			int tileMidRowIdx = bbMidIdx.mw_i32[triIdx];
-			int tileEndRowIdx = bbTopIdx.mw_i32[triIdx];
+			int bbWidth = simd_i32(bbTileSizeX)[triIdx];
+			int bbHeight = simd_i32(bbTileSizeY)[triIdx];
+			int tileRowIdx = simd_i32(bbBottomIdx)[triIdx];
+			int tileMidRowIdx = simd_i32(bbMidIdx)[triIdx];
+			int tileEndRowIdx = simd_i32(bbTopIdx)[triIdx];
 
 			if (bbWidth > BIG_TRIANGLE && bbHeight > BIG_TRIANGLE) // For big triangles we use a more expensive but tighter traversal algorithm
 			{
@@ -1356,9 +1358,9 @@ public:
 					int triIdx = clipTail * 3;
 					for (int i = 0; i < 3; i++)
 					{
-						vtxX[i].mw_f32[clipTri] = clipTriBuffer[triIdx + i].m128_f32[0];
-						vtxY[i].mw_f32[clipTri] = clipTriBuffer[triIdx + i].m128_f32[1];
-						vtxW[i].mw_f32[clipTri] = clipTriBuffer[triIdx + i].m128_f32[2];
+						simd_f32(vtxX[i])[clipTri] = simd_f32(clipTriBuffer[triIdx + i])[0];
+						simd_f32(vtxY[i])[clipTri] = simd_f32(clipTriBuffer[triIdx + i])[1];
+						simd_f32(vtxW[i])[clipTri] = simd_f32(clipTriBuffer[triIdx + i])[2];
 					}
 					clipTail = (clipTail + 1) & (MAX_CLIPPED-1);
 				}
@@ -1488,26 +1490,26 @@ public:
 		// Pad bounding box to (32xN) tiles. Tile BB is used for looping / traversal
 		//////////////////////////////////////////////////////////////////////////////
 		__m128i tileBBoxi = _mm_and_si128(_mm_add_epi32(pixelBBoxi, SIMD_TILE_PAD), SIMD_TILE_PAD_MASK);
-		int txMin = tileBBoxi.m128i_i32[0] >> TILE_WIDTH_SHIFT;
-		int txMax = tileBBoxi.m128i_i32[1] >> TILE_WIDTH_SHIFT;
-		int tileRowIdx = (tileBBoxi.m128i_i32[2] >> TILE_HEIGHT_SHIFT)*mTilesWidth;
-		int tileRowIdxEnd = (tileBBoxi.m128i_i32[3] >> TILE_HEIGHT_SHIFT)*mTilesWidth;
+		int txMin = simd_i32(tileBBoxi)[0] >> TILE_WIDTH_SHIFT;
+		int txMax = simd_i32(tileBBoxi)[1] >> TILE_WIDTH_SHIFT;
+		int tileRowIdx = (simd_i32(tileBBoxi)[2] >> TILE_HEIGHT_SHIFT)*mTilesWidth;
+		int tileRowIdxEnd = (simd_i32(tileBBoxi)[3] >> TILE_HEIGHT_SHIFT)*mTilesWidth;
 
-		if (tileBBoxi.m128i_i32[0] == tileBBoxi.m128i_i32[1] || tileBBoxi.m128i_i32[2] == tileBBoxi.m128i_i32[3])
+		if (simd_i32(tileBBoxi)[0] == simd_i32(tileBBoxi)[1] || simd_i32(tileBBoxi)[2] == simd_i32(tileBBoxi)[3])
 			return CullingResult::VIEW_CULLED;
 
 		///////////////////////////////////////////////////////////////////////////////
 		// Pad bounding box to (8x4) subtiles. Skip SIMD lanes outside the subtile BB
 		///////////////////////////////////////////////////////////////////////////////
 		__m128i subTileBBoxi = _mm_and_si128(_mm_add_epi32(pixelBBoxi, SIMD_SUB_TILE_PAD), SIMD_SUB_TILE_PAD_MASK);
-		__mwi stxmin = _mmw_set1_epi32(subTileBBoxi.m128i_i32[0] - 1); // - 1 to be able to use GT test
-		__mwi stymin = _mmw_set1_epi32(subTileBBoxi.m128i_i32[2] - 1); // - 1 to be able to use GT test
-		__mwi stxmax = _mmw_set1_epi32(subTileBBoxi.m128i_i32[1]);
-		__mwi stymax = _mmw_set1_epi32(subTileBBoxi.m128i_i32[3]);
+		__mwi stxmin = _mmw_set1_epi32(simd_i32(subTileBBoxi)[0] - 1); // - 1 to be able to use GT test
+		__mwi stymin = _mmw_set1_epi32(simd_i32(subTileBBoxi)[2] - 1); // - 1 to be able to use GT test
+		__mwi stxmax = _mmw_set1_epi32(simd_i32(subTileBBoxi)[1]);
+		__mwi stymax = _mmw_set1_epi32(simd_i32(subTileBBoxi)[3]);
 
 		// Setup pixel coordinates used to discard lanes outside subtile BB
-		__mwi startPixelX = _mmw_add_epi32(SIMD_SUB_TILE_COL_OFFSET, _mmw_set1_epi32(tileBBoxi.m128i_i32[0]));
-		__mwi pixelY = _mmw_add_epi32(SIMD_SUB_TILE_ROW_OFFSET, _mmw_set1_epi32(tileBBoxi.m128i_i32[2]));
+		__mwi startPixelX = _mmw_add_epi32(SIMD_SUB_TILE_COL_OFFSET, _mmw_set1_epi32(simd_i32(tileBBoxi)[0]));
+		__mwi pixelY = _mmw_add_epi32(SIMD_SUB_TILE_ROW_OFFSET, _mmw_set1_epi32(simd_i32(tileBBoxi)[2]));
 
 		//////////////////////////////////////////////////////////////////////////////
 		// Compute z from w. Note that z is reversed order, 0 = far, 1 = near, which
@@ -1607,9 +1609,9 @@ public:
 					int triIdx = clipTail * 3;
 					for (int i = 0; i < 3; i++)
 					{
-						vtxX[i].mw_f32[clipTri] = clipTriBuffer[triIdx + i].m128_f32[0];
-						vtxY[i].mw_f32[clipTri] = clipTriBuffer[triIdx + i].m128_f32[1];
-						vtxW[i].mw_f32[clipTri] = clipTriBuffer[triIdx + i].m128_f32[2];
+						simd_f32(vtxX[i])[clipTri] = simd_f32(clipTriBuffer[triIdx + i])[0];
+						simd_f32(vtxY[i])[clipTri] = simd_f32(clipTriBuffer[triIdx + i])[1];
+						simd_f32(vtxW[i])[clipTri] = simd_f32(clipTriBuffer[triIdx + i])[2];
 					}
 					clipTail = (clipTail + 1) & (MAX_CLIPPED - 1);
 				}
@@ -1688,11 +1690,11 @@ public:
 			{
 				unsigned int triIdx = find_clear_lsb(&triMask);
 
-                // Clamp bounding box to bins
-				int startX = min(nBinsW-1, bbPixelMinX.mw_i32[triIdx] / binWidth);
-				int startY = min(nBinsH-1, bbPixelMinY.mw_i32[triIdx] / binHeight);
-				int endX = min(nBinsW, (bbPixelMaxX.mw_i32[triIdx] + binWidth - 1) / binWidth);
-				int endY = min(nBinsH, (bbPixelMaxY.mw_i32[triIdx] + binHeight - 1) / binHeight);
+				// Clamp bounding box to bins
+				int startX = min(nBinsW-1, simd_i32(bbPixelMinX)[triIdx] / binWidth);
+				int startY = min(nBinsH-1, simd_i32(bbPixelMinY)[triIdx] / binHeight);
+				int endX = min(nBinsW, (simd_i32(bbPixelMaxX)[triIdx] + binWidth - 1) / binWidth);
+				int endY = min(nBinsH, (simd_i32(bbPixelMaxY)[triIdx] + binHeight - 1) / binHeight);
 
 				for (int y = startY; y < endY; ++y)
 				{
@@ -1703,13 +1705,13 @@ public:
 						for (int i = 0; i < 3; ++i)
 						{
 #if PRECISE_COVERAGE != 0
-							((int*)triLists[binIdx].mPtr)[i * 3 + writeTriIdx * 9 + 0] = ipVtxX[i].mw_i32[triIdx];
-							((int*)triLists[binIdx].mPtr)[i * 3 + writeTriIdx * 9 + 1] = ipVtxY[i].mw_i32[triIdx];
+							((int*)triLists[binIdx].mPtr)[i * 3 + writeTriIdx * 9 + 0] = simd_i32(ipVtxX[i])[triIdx];
+							((int*)triLists[binIdx].mPtr)[i * 3 + writeTriIdx * 9 + 1] = simd_i32(ipVtxY[i])[triIdx];
 #else
-							triLists[binIdx].mPtr[i * 3 + writeTriIdx * 9 + 0] = pVtxX[i].mw_f32[triIdx];
-							triLists[binIdx].mPtr[i * 3 + writeTriIdx * 9 + 1] = pVtxY[i].mw_f32[triIdx];
+							triLists[binIdx].mPtr[i * 3 + writeTriIdx * 9 + 0] = simd_f32(pVtxX[i])[triIdx];
+							triLists[binIdx].mPtr[i * 3 + writeTriIdx * 9 + 1] = simd_f32(pVtxY[i])[triIdx];
 #endif
-							triLists[binIdx].mPtr[i * 3 + writeTriIdx * 9 + 2] = pVtxZ[i].mw_f32[triIdx];
+							triLists[binIdx].mPtr[i * 3 + writeTriIdx * 9 + 2] = simd_f32(pVtxZ[i])[triIdx];
 						}
 						triLists[binIdx].mTriIdx++;
 					}
@@ -1721,7 +1723,7 @@ public:
 #endif
 	}
 
-	void BinTriangles(const float *inVtx, const unsigned int *inTris, int nTris, TriList *triLists, unsigned int nBinsW, unsigned int nBinsH, const float *modelToClipMatrix, ClipPlanes clipPlaneMask, const VertexLayout &vtxLayout)
+	void BinTriangles(const float *inVtx, const unsigned int *inTris, int nTris, TriList *triLists, unsigned int nBinsW, unsigned int nBinsH, const float *modelToClipMatrix, ClipPlanes clipPlaneMask, const VertexLayout &vtxLayout) override
 	{
 		if (vtxLayout.mStride == 16 && vtxLayout.mOffsetY == 4 && vtxLayout.mOffsetW == 12)
 			BinTriangles<true>(inVtx, inTris, nTris, triLists, nBinsW, nBinsH, modelToClipMatrix, clipPlaneMask, vtxLayout);
@@ -1729,16 +1731,12 @@ public:
 			BinTriangles<false>(inVtx, inTris, nTris, triLists, nBinsW, nBinsH, modelToClipMatrix, clipPlaneMask, vtxLayout);
 	}
 
-	void RenderTrilist(const TriList &triList, const ScissorRect *scissor)
+	void RenderTrilist(const TriList &triList, const ScissorRect *scissor) override
 	{
 		assert(mMaskedHiZBuffer != nullptr);
 
 		// Setup fullscreen scissor rect as default
 		scissor = scissor == nullptr ? &mFullscreenScissor : scissor;
-
-		const unsigned int componentSize = sizeof(__mw) / sizeof(float);
-		const unsigned int vtxSize = 3 * componentSize;
-		const unsigned int triSize = 3 * vtxSize;
 
 		for (unsigned int i = 0; i < triList.mTriIdx; i += SIMD_LANES)
 		{
@@ -1757,9 +1755,9 @@ public:
 				unsigned int triIdx = i + l;
 				for (int v = 0; v < 3; ++v)
 				{
-					ipVtxX[v].mw_i32[l] = ((int*)triList.mPtr)[v * 3 + triIdx * 9 + 0];
-					ipVtxY[v].mw_i32[l] = ((int*)triList.mPtr)[v * 3 + triIdx * 9 + 1];
-					pVtxZ[v].mw_f32[l] = triList.mPtr[v * 3 + triIdx * 9 + 2];
+					simd_i32(ipVtxX[v])[l] = ((int*)triList.mPtr)[v * 3 + triIdx * 9 + 0];
+					simd_i32(ipVtxY[v])[l] = ((int*)triList.mPtr)[v * 3 + triIdx * 9 + 1];
+					simd_f32(pVtxZ[v])[l] = triList.mPtr[v * 3 + triIdx * 9 + 2];
 				}
 			}
 
@@ -1780,9 +1778,9 @@ public:
 				unsigned int triIdx = i + l;
 				for (int v = 0; v < 3; ++v)
 				{
-					pVtxX[v].mw_f32[l] = triList.mPtr[v * 3 + triIdx * 9 + 0];
-					pVtxY[v].mw_f32[l] = triList.mPtr[v * 3 + triIdx * 9 + 1];
-					pVtxZ[v].mw_f32[l] = triList.mPtr[v * 3 + triIdx * 9 + 2];
+					simd_f32(pVtxX[v])[l] = triList.mPtr[v * 3 + triIdx * 9 + 0];
+					simd_f32(pVtxY[v])[l] = triList.mPtr[v * 3 + triIdx * 9 + 1];
+					simd_f32(pVtxZ[v])[l] = triList.mPtr[v * 3 + triIdx * 9 + 2];
 				}
 			}
 
@@ -1827,8 +1825,8 @@ public:
 				int py = (y % SUB_TILE_HEIGHT);
 				int bitIdx = py * 8 + px;
 
-				int pixelLayer = (mMaskedHiZBuffer[tileIdx].mMask.mw_i32[subTileIdx] >> bitIdx) & 1;
-				float pixelDepth = mMaskedHiZBuffer[tileIdx].mZMin[pixelLayer].mw_f32[subTileIdx];
+				int pixelLayer = (simd_i32(mMaskedHiZBuffer[tileIdx].mMask)[subTileIdx] >> bitIdx) & 1;
+				float pixelDepth = simd_f32(mMaskedHiZBuffer[tileIdx].mZMin[pixelLayer])[subTileIdx];
 
 				depthData[y * mWidth + x] = pixelDepth;
 			}

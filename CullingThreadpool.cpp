@@ -19,8 +19,8 @@
 #define SAFE_DELETE_ARRAY(X) {if (X != nullptr) delete[] X; X = nullptr;}
 
 template<class T> CullingThreadpool::StateData<T>::StateData(unsigned int maxJobs) :
-	mCurrentIdx(~0),
-	mMaxJobs(maxJobs)
+	mMaxJobs(maxJobs),
+	mCurrentIdx(~0)
 {
 	mData = new T[mMaxJobs];
 }
@@ -313,15 +313,15 @@ void CullingThreadpool::ThreadMain(unsigned int threadIdx)
 
 CullingThreadpool::CullingThreadpool(unsigned int numThreads, unsigned int binsW, unsigned int binsH, unsigned int maxJobs) :
 	mNumThreads(numThreads),
+	mMaxJobs(maxJobs),
+	mBinsW(binsW),
+	mBinsH(binsH),
 	mKillThreads(false),
 	mSuspendThreads(true),
 	mNumSuspendedThreads(0),
-	mBinsW(binsW),
-	mBinsH(binsH),
-	mMOC(nullptr),
-	mVertexLayouts(maxJobs),
 	mModelToClipMatrices(maxJobs),
-	mMaxJobs(maxJobs)
+	mVertexLayouts(maxJobs),
+	mMOC(nullptr)
 {
 	mNumBins = mBinsW*mBinsH;
 	assert(mNumBins >= mNumThreads);	// Having less bins than threads is a bad idea!

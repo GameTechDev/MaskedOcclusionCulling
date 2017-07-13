@@ -12,37 +12,17 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and limitations under the License.
  */
-
-#include <new.h>
 #include <string.h>
 #include <assert.h>
 #include <float.h>
 #include "MaskedOcclusionCulling.h"
+#include "CompilerSpecific.inl"
 
-#if defined(__INTEL_COMPILER) // Make sure compiler features AVX-512 intrinsics. Visual Studio 2017 does not support integer AVX-512 intrinsics
+// Make sure compiler supports AVX-512 intrinsics. 
+#if (defined(__INTEL_COMPILER) && __INTEL_COMPILER >= 1600) || (defined(__GNUC__) && __GNUC__ >= 5)
 
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Compiler specific functions: currently only MSC and Intel compiler should work.
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef _MSC_VER
-
-	#include <intrin.h>
-
-	#define FORCE_INLINE __forceinline
-
-	static FORCE_INLINE unsigned long find_clear_lsb(unsigned int *mask)
-	{
-		unsigned long idx;
-		_BitScanForward(&idx, *mask);
-		*mask &= *mask - 1;
-		return idx;
-	}
-
-	#ifndef __AVX2__
-		#error For best performance, MaskedOcclusionCullingAVX512.cpp should be compiled with /arch:AVX2
-	#endif
-
+#ifndef __AVX2__
+	#error For best performance, MaskedOcclusionCullingAVX512.cpp should be compiled with /arch:AVX2
 #endif
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,7 +39,8 @@
 #define SIMD_SUB_TILE_COL_OFFSET_F _mm512_setr_ps(0, SUB_TILE_WIDTH, SUB_TILE_WIDTH * 2, SUB_TILE_WIDTH * 3, 0, SUB_TILE_WIDTH, SUB_TILE_WIDTH * 2, SUB_TILE_WIDTH * 3, 0, SUB_TILE_WIDTH, SUB_TILE_WIDTH * 2, SUB_TILE_WIDTH * 3, 0, SUB_TILE_WIDTH, SUB_TILE_WIDTH * 2, SUB_TILE_WIDTH * 3)
 #define SIMD_SUB_TILE_ROW_OFFSET_F _mm512_setr_ps(0, 0, 0, 0, SUB_TILE_HEIGHT, SUB_TILE_HEIGHT, SUB_TILE_HEIGHT, SUB_TILE_HEIGHT, SUB_TILE_HEIGHT * 2, SUB_TILE_HEIGHT * 2, SUB_TILE_HEIGHT * 2, SUB_TILE_HEIGHT * 2, SUB_TILE_HEIGHT * 3, SUB_TILE_HEIGHT * 3, SUB_TILE_HEIGHT * 3, SUB_TILE_HEIGHT * 3)
 
-#define SIMD_SHUFFLE_SCANLINE_TO_SUBTILES _mm512_set_epi8(0xF, 0xB, 0x7, 0x3, 0xE, 0xA, 0x6, 0x2, 0xD, 0x9, 0x5, 0x1, 0xC, 0x8, 0x4, 0x0, 0xF, 0xB, 0x7, 0x3, 0xE, 0xA, 0x6, 0x2, 0xD, 0x9, 0x5, 0x1, 0xC, 0x8, 0x4, 0x0, 0xF, 0xB, 0x7, 0x3, 0xE, 0xA, 0x6, 0x2, 0xD, 0x9, 0x5, 0x1, 0xC, 0x8, 0x4, 0x0, 0xF, 0xB, 0x7, 0x3, 0xE, 0xA, 0x6, 0x2, 0xD, 0x9, 0x5, 0x1, 0xC, 0x8, 0x4, 0x0)
+//#define SIMD_SHUFFLE_SCANLINE_TO_SUBTILES _mm512_set_epi8(0xF, 0xB, 0x7, 0x3, 0xE, 0xA, 0x6, 0x2, 0xD, 0x9, 0x5, 0x1, 0xC, 0x8, 0x4, 0x0, 0xF, 0xB, 0x7, 0x3, 0xE, 0xA, 0x6, 0x2, 0xD, 0x9, 0x5, 0x1, 0xC, 0x8, 0x4, 0x0, 0xF, 0xB, 0x7, 0x3, 0xE, 0xA, 0x6, 0x2, 0xD, 0x9, 0x5, 0x1, 0xC, 0x8, 0x4, 0x0, 0xF, 0xB, 0x7, 0x3, 0xE, 0xA, 0x6, 0x2, 0xD, 0x9, 0x5, 0x1, 0xC, 0x8, 0x4, 0x0)
+#define SIMD_SHUFFLE_SCANLINE_TO_SUBTILES _mm512_set_epi32(0x0F0B0703, 0x0E0A0602, 0x0D090501, 0x0C080400, 0x0F0B0703, 0x0E0A0602, 0x0D090501, 0x0C080400, 0x0F0B0703, 0x0E0A0602, 0x0D090501, 0x0C080400, 0x0F0B0703, 0x0E0A0602, 0x0D090501, 0x0C080400)
 
 #define SIMD_LANE_YCOORD_I _mm512_setr_epi32(128, 384, 640, 896, 1152, 1408, 1664, 1920, 2176, 2432, 2688, 2944, 3200, 3456, 3712, 3968)
 #define SIMD_LANE_YCOORD_F _mm512_setr_ps(128.0f, 384.0f, 640.0f, 896.0f, 1152.0f, 1408.0f, 1664.0f, 1920.0f, 2176.0f, 2432.0f, 2688.0f, 2944.0f, 3200.0f, 3456.0f, 3712.0f, 3968.0f)
@@ -71,58 +52,55 @@
 typedef __m512 __mw;
 typedef __m512i __mwi;
 
-#define mw_f32 __m512_f32
-#define mw_i32 __m512i_i32
+#define _mmw_set1_ps                _mm512_set1_ps
+#define _mmw_setzero_ps             _mm512_setzero_ps
+#define _mmw_and_ps                 _mm512_and_ps
+#define _mmw_or_ps                  _mm512_or_ps
+#define _mmw_xor_ps                 _mm512_xor_ps
+#define _mmw_not_ps(a)              _mm512_xor_ps((a), _mm512_castsi512_ps(_mm512_set1_epi32(~0)))
+#define _mmw_andnot_ps              _mm512_andnot_ps
+#define _mmw_neg_ps(a)              _mm512_xor_ps((a), _mm512_set1_ps(-0.0f))
+#define _mmw_abs_ps(a)              _mm512_and_ps((a), _mm512_castsi512_ps(_mm512_set1_epi32(0x7FFFFFFF)))
+#define _mmw_add_ps                 _mm512_add_ps
+#define _mmw_sub_ps                 _mm512_sub_ps
+#define _mmw_mul_ps                 _mm512_mul_ps
+#define _mmw_div_ps                 _mm512_div_ps
+#define _mmw_min_ps                 _mm512_min_ps
+#define _mmw_max_ps                 _mm512_max_ps
+#define _mmw_fmadd_ps               _mm512_fmadd_ps
+#define _mmw_fmsub_ps               _mm512_fmsub_ps
+#define _mmw_shuffle_ps             _mm512_shuffle_ps
+#define _mmw_insertf32x4_ps         _mm512_insertf32x4
+#define _mmw_cvtepi32_ps            _mm512_cvtepi32_ps
+#define _mmw_blendv_epi32(a,b,c)    simd_cast<__mwi>(_mmw_blendv_ps(simd_cast<__mw>(a), simd_cast<__mw>(b), simd_cast<__mw>(c)))
 
-#define _mmw_set1_ps              _mm512_set1_ps
-#define _mmw_setzero_ps           _mm512_setzero_ps
-#define _mmw_and_ps               _mm512_and_ps
-#define _mmw_or_ps                _mm512_or_ps
-#define _mmw_xor_ps               _mm512_xor_ps
-#define _mmw_not_ps(a)            _mm512_xor_ps((a), _mm512_castsi512_ps(_mm512_set1_epi32(~0)))
-#define _mmw_andnot_ps            _mm512_andnot_ps
-#define _mmw_neg_ps(a)            _mm512_xor_ps((a), _mm512_set1_ps(-0.0f))
-#define _mmw_abs_ps(a)            _mm512_and_ps((a), _mm512_castsi512_ps(_mm512_set1_epi32(0x7FFFFFFF)))
-#define _mmw_add_ps               _mm512_add_ps
-#define _mmw_sub_ps               _mm512_sub_ps
-#define _mmw_mul_ps               _mm512_mul_ps
-#define _mmw_div_ps               _mm512_div_ps
-#define _mmw_min_ps               _mm512_min_ps
-#define _mmw_max_ps               _mm512_max_ps
-#define _mmw_fmadd_ps             _mm512_fmadd_ps
-#define _mmw_fmsub_ps             _mm512_fmsub_ps
-#define _mmw_shuffle_ps           _mm512_shuffle_ps
-#define _mmw_insertf32x4_ps       _mm512_insertf32x4
-#define _mmw_cvtepi32_ps          _mm512_cvtepi32_ps
-#define _mmw_blendv_epi32(a,b,c)  simd_cast<__mwi>(_mmw_blendv_ps(simd_cast<__mw>(a), simd_cast<__mw>(b), simd_cast<__mw>(c)))
+#define _mmw_set1_epi32             _mm512_set1_epi32
+#define _mmw_setzero_epi32          _mm512_setzero_si512
+#define _mmw_and_epi32              _mm512_and_si512
+#define _mmw_or_epi32               _mm512_or_si512
+#define _mmw_xor_epi32              _mm512_xor_si512
+#define _mmw_not_epi32(a)           _mm512_xor_si512((a), _mm512_set1_epi32(~0))
+#define _mmw_andnot_epi32           _mm512_andnot_si512
+#define _mmw_neg_epi32(a)           _mm512_sub_epi32(_mm512_set1_epi32(0), (a))
+#define _mmw_add_epi32              _mm512_add_epi32
+#define _mmw_sub_epi32              _mm512_sub_epi32
+#define _mmw_min_epi32              _mm512_min_epi32
+#define _mmw_max_epi32              _mm512_max_epi32
+#define _mmw_subs_epu16             _mm512_subs_epu16
+#define _mmw_mullo_epi32            _mm512_mullo_epi32
+#define _mmw_srai_epi32             _mm512_srai_epi32
+#define _mmw_srli_epi32             _mm512_srli_epi32
+#define _mmw_slli_epi32             _mm512_slli_epi32
+#define _mmw_sllv_ones(x)           _mm512_sllv_epi32(SIMD_BITS_ONE, x)
+#define _mmw_transpose_epi8(x)      _mm512_shuffle_epi8(x, SIMD_SHUFFLE_SCANLINE_TO_SUBTILES)
+#define _mmw_abs_epi32              _mm512_abs_epi32
+#define _mmw_cvtps_epi32            _mm512_cvtps_epi32
+#define _mmw_cvttps_epi32           _mm512_cvttps_epi32
 
-#define _mmw_set1_epi32           _mm512_set1_epi32
-#define _mmw_setzero_epi32        _mm512_setzero_si512
-#define _mmw_and_epi32            _mm512_and_si512
-#define _mmw_or_epi32             _mm512_or_si512
-#define _mmw_xor_epi32            _mm512_xor_si512
-#define _mmw_not_epi32(a)         _mm512_xor_si512((a), _mm512_set1_epi32(~0))
-#define _mmw_andnot_epi32         _mm512_andnot_si512
-#define _mmw_neg_epi32(a)         _mm512_sub_epi32(_mm512_set1_epi32(0), (a))
-#define _mmw_add_epi32            _mm512_add_epi32
-#define _mmw_sub_epi32            _mm512_sub_epi32
-#define _mmw_min_epi32            _mm512_min_epi32
-#define _mmw_max_epi32            _mm512_max_epi32
-#define _mmw_subs_epu16           _mm512_subs_epu16
-#define _mmw_mullo_epi32          _mm512_mullo_epi32
-#define _mmw_srai_epi32           _mm512_srai_epi32
-#define _mmw_srli_epi32           _mm512_srli_epi32
-#define _mmw_slli_epi32           _mm512_slli_epi32
-#define _mmw_sllv_ones(x)         _mm512_sllv_epi32(SIMD_BITS_ONE, x)
-#define _mmw_transpose_epi8(x)    _mm512_shuffle_epi8(x, SIMD_SHUFFLE_SCANLINE_TO_SUBTILES)
-#define _mmw_abs_epi32            _mm512_abs_epi32
-#define _mmw_cvtps_epi32          _mm512_cvtps_epi32
-#define _mmw_cvttps_epi32         _mm512_cvttps_epi32
-
-#define _mmx_dp4_ps(a, b)         _mm_dp_ps(a, b, 0xFF)
-#define _mmx_fmadd_ps             _mm_fmadd_ps
-#define _mmx_max_epi32            _mm_max_epi32
-#define _mmx_min_epi32            _mm_min_epi32
+#define _mmx_dp4_ps(a, b)           _mm_dp_ps(a, b, 0xFF)
+#define _mmx_fmadd_ps               _mm_fmadd_ps
+#define _mmx_max_epi32              _mm_max_epi32
+#define _mmx_min_epi32              _mm_min_epi32
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // SIMD casting functions
@@ -147,6 +125,28 @@ template<> FORCE_INLINE __m512  simd_cast<__m512>(__m512 A) { return A; }
 template<> FORCE_INLINE __m512i simd_cast<__m512i>(int A) { return _mm512_set1_epi32(A); }
 template<> FORCE_INLINE __m512i simd_cast<__m512i>(__m512 A) { return _mm512_castps_si512(A); }
 template<> FORCE_INLINE __m512i simd_cast<__m512i>(__m512i A) { return A; }
+
+#define MAKE_ACCESSOR(name, simd_type, base_type, is_const, elements) \
+	FORCE_INLINE is_const base_type * name(is_const simd_type &a) { \
+		union accessor { simd_type m_native; base_type m_array[elements]; }; \
+		is_const accessor *acs = reinterpret_cast<is_const accessor*>(&a); \
+		return acs->m_array; \
+	}
+
+MAKE_ACCESSOR(simd_f32, __m128, float, , 4)
+MAKE_ACCESSOR(simd_f32, __m128, float, const, 4)
+MAKE_ACCESSOR(simd_i32, __m128i, int, , 4)
+MAKE_ACCESSOR(simd_i32, __m128i, int, const, 4)
+
+MAKE_ACCESSOR(simd_f32, __m256, float, , 8)
+MAKE_ACCESSOR(simd_f32, __m256, float, const, 8)
+MAKE_ACCESSOR(simd_i32, __m256i, int, , 8)
+MAKE_ACCESSOR(simd_i32, __m256i, int, const, 8)
+
+MAKE_ACCESSOR(simd_f32, __m512, float, , 16)
+MAKE_ACCESSOR(simd_f32, __m512, float, const, 16)
+MAKE_ACCESSOR(simd_i32, __m512i, int, , 16)
+MAKE_ACCESSOR(simd_i32, __m512i, int, const, 16)
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Specialized AVX input assembly function for general vertex gather 
@@ -290,12 +290,12 @@ namespace MaskedOcclusionCullingAVX512
 			AVX512Support = false;
 
 			int nIds, nExIds;
-			__cpuid(cpui, 0);
+			__cpuidex(cpui, 0, 0);
 			nIds = cpui[0];
-			__cpuid(cpui, 0x80000000);
+			__cpuidex(cpui, 0x80000000, 0);
 			nExIds = cpui[0];
 
-			if (nIds >= 7 && nExIds >= 0x80000001)
+			if (nIds >= 7 && nExIds >= (int)0x80000001)
 			{
 				AVX512Support = true;
 

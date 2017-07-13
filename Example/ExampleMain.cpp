@@ -12,10 +12,15 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and limitations under the License.
  */
-#define _USE_MATH_DEFINES
 #include <stdio.h>
 #include <stdlib.h>
+#include <float.h>
 #include <algorithm>
+#ifdef _WIN32
+	#include <intrin.h>
+#else
+	#include <immintrin.h>
+#endif
 
 #include "../MaskedOcclusionCulling.h"
 

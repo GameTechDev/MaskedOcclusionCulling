@@ -44,7 +44,7 @@
  * balance between performance and low leakage. If QUICK_MASK is defined to 0, use the algorithm from
  * "Masked Depth Culling for Graphics Hardware" which has less leakage, but also lower performance.
  */
-#define QUICK_MASK			1
+#define QUICK_MASK          1
 
 #endif
 
@@ -56,7 +56,7 @@
  * behaviour. It also affects the ScissorRect screen space coordinates and the memory layout of the buffer 
  * returned by ComputePixelDepthBuffer().
  */
-#define USE_D3D				1
+#define USE_D3D             1
 
 #endif
 
@@ -65,7 +65,7 @@
  * Define PRECISE_COVERAGE to 1 to more closely match GPU rasterization rules. The increased precision comes
  * at a cost of slightly lower performance.
  */
-#define PRECISE_COVERAGE	0
+#define PRECISE_COVERAGE    0
 
 #endif
 
@@ -74,7 +74,7 @@
  * Define ENABLE_STATS to 1 to gather various statistics during occlusion culling. Can be used for profiling 
  * and debugging. Note that enabling this function will reduce performance significantly.
  */
-#define ENABLE_STATS		0
+#define ENABLE_STATS        0
 
 #endif
 

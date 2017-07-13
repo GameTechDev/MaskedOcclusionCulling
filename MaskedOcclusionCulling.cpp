@@ -12,42 +12,11 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and limitations under the License.
  */
-#include <new.h>
-#include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 #include <float.h>
 #include "MaskedOcclusionCulling.h"
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Compiler specific functions: currently only MSC and Intel compiler should work.
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef _MSC_VER
-
-	#include <intrin.h>
-
-	#define FORCE_INLINE __forceinline
-
-	static FORCE_INLINE unsigned long find_clear_lsb(unsigned int *mask)
-	{
-		unsigned long idx;
-		_BitScanForward(&idx, *mask);
-		*mask &= *mask - 1;
-		return idx;
-	}
-
-	static void *aligned_alloc(size_t alignment, size_t size)
-	{
-		return _aligned_malloc(size, alignment);
-	}
-	
-	static void aligned_free(void *ptr)
-	{
-		_aligned_free(ptr);
-	}
-	
-#endif
+#include "CompilerSpecific.inl"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Utility functions (not directly related to the algorithm/rasterizer)
@@ -116,9 +85,6 @@ typedef MaskedOcclusionCulling::VertexLayout    VertexLayout;
 typedef __m128 __mw;
 typedef __m128i __mwi;
 
-#define mw_f32 m128_f32
-#define mw_i32 m128i_i32
-
 #define _mmw_set1_ps                _mm_set1_ps
 #define _mmw_setzero_ps             _mm_setzero_ps
 #define _mmw_and_ps                 _mm_and_ps
@@ -181,6 +147,18 @@ template<> FORCE_INLINE __m128i simd_cast<__m128i>(int A) { return _mm_set1_epi3
 template<> FORCE_INLINE __m128i simd_cast<__m128i>(__m128 A) { return _mm_castps_si128(A); }
 template<> FORCE_INLINE __m128i simd_cast<__m128i>(__m128i A) { return A; }
 
+#define MAKE_ACCESSOR(name, simd_type, base_type, is_const, elements) \
+	FORCE_INLINE is_const base_type * name(is_const simd_type &a) { \
+		union accessor { simd_type m_native; base_type m_array[elements]; }; \
+		is_const accessor *acs = reinterpret_cast<is_const accessor*>(&a); \
+		return acs->m_array; \
+	}
+
+MAKE_ACCESSOR(simd_f32, __m128, float, , 4)
+MAKE_ACCESSOR(simd_f32, __m128, float, const, 4)
+MAKE_ACCESSOR(simd_i32, __m128i, int, , 4)
+MAKE_ACCESSOR(simd_i32, __m128i, int, const, 4)
+
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Specialized SSE input assembly function for general vertex gather 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -195,9 +173,9 @@ FORCE_INLINE void GatherVertices(__m128 *vtxX, __m128 *vtxY, __m128 *vtxW, const
 			char *vPtrY = vPtrX + vtxLayout.mOffsetY;
 			char *vPtrW = vPtrX + vtxLayout.mOffsetW;
 
-			vtxX[i].m128_f32[lane] = *((float*)vPtrX);
-			vtxY[i].m128_f32[lane] = *((float*)vPtrY);
-			vtxW[i].m128_f32[lane] = *((float*)vPtrW);
+			simd_f32(vtxX[i])[lane] = *((float*)vPtrX);
+			simd_f32(vtxY[i])[lane] = *((float*)vPtrY);
+			simd_f32(vtxW[i])[lane] = *((float*)vPtrW);
 		}
 	}
 }
@@ -226,7 +204,7 @@ namespace MaskedOcclusionCullingSSE41
 		__m128i shift = _mm_min_epi32(ishift, _mm_set1_epi32(32));
 
 		// Uses lookup tables and _mm_shuffle_epi8 to perform _mm_sllv_epi32(~0, shift)
-		const __m128i byteShiftLUT = _mm_setr_epi8(~0, ~0 << 1, ~0 << 2, ~0 << 3, ~0 << 4, ~0 << 5, ~0 << 6, ~0 << 7, 0, 0, 0, 0, 0, 0, 0, 0);
+		const __m128i byteShiftLUT = _mm_setr_epi8((char)0xFF, (char)0xFE, (char)0xFC, (char)0xF8, (char)0xF0, (char)0xE0, (char)0xC0, (char)0x80, 0, 0, 0, 0, 0, 0, 0, 0);
 		const __m128i byteShiftOffset = _mm_setr_epi8(0, 8, 16, 24, 0, 8, 16, 24, 0, 8, 16, 24, 0, 8, 16, 24);
 		const __m128i byteShiftShuffle = _mm_setr_epi8(0x0, 0x0, 0x0, 0x0, 0x4, 0x4, 0x4, 0x4, 0x8, 0x8, 0x8, 0x8, 0xC, 0xC, 0xC, 0xC);
 
@@ -259,11 +237,9 @@ namespace MaskedOcclusionCullingSSE41
 		{
 			initialized = true;
 
-			int nIds, nExIds;
-			__cpuid(cpui, 0);
+			int nIds;
+			__cpuidex(cpui, 0, 0);
 			nIds = cpui[0];
-			__cpuid(cpui, 0x80000000);
-			nExIds = cpui[0];
 
 			if (nIds >= 1)
 			{
@@ -362,10 +338,10 @@ namespace MaskedOcclusionCullingSSE2
 			0U };
 
 		__m128i retMask;
-		retMask.m128i_u32[0] = maskLUT[shift.m128i_u32[0]];
-		retMask.m128i_u32[1] = maskLUT[shift.m128i_u32[1]];
-		retMask.m128i_u32[2] = maskLUT[shift.m128i_u32[2]];
-		retMask.m128i_u32[3] = maskLUT[shift.m128i_u32[3]];
+		simd_i32(retMask)[0] = (int)maskLUT[simd_i32(shift)[0]];
+		simd_i32(retMask)[1] = (int)maskLUT[simd_i32(shift)[1]];
+		simd_i32(retMask)[2] = (int)maskLUT[simd_i32(shift)[2]];
+		simd_i32(retMask)[3] = (int)maskLUT[simd_i32(shift)[3]];
 		return retMask;
 	}
 
