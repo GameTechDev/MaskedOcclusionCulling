@@ -10,7 +10,7 @@ set( MOC_INCLUDE_FILES ../MaskedOcclusionCulling.h ../CullingThreadpool.h ../Com
 set( MOC_FILES ${MOC_AVX512_FILES} ${MOC_AVX2_FILES} ${MOC_SSE_FILES} ${MOC_INCLUDE_FILES} )
 
 ########################## Common compiler flags ###########################
-set(COMMON_CXX_FLAGS "-Wall -std=c++0x -std=c++11 -O3 -m64" )
+set(COMMON_CXX_FLAGS "-std=c++0x -std=c++11 -O3 -m64" )
 set(CMAKE_CXX_FLAGS "${COMMON_CXX_FLAGS}")
 
 ################### Setup AVX512 version ####################

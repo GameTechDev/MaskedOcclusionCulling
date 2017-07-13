@@ -22,12 +22,11 @@
 // Make sure compiler supports AVX-512 intrinsics. 
 #if (defined(__INTEL_COMPILER) && __INTEL_COMPILER >= 1600) || (defined(__clang__) && __clang_major__ >= 4) || (defined(__GNUC__) && __GNUC__ >= 5)
 
-// For performance reasons, the MaskedOcclusionCullingAVX512.cpp file should be compiled with VEX encoding for SSE instructions (to avoid 
-// AVX-SSE transition penalties, see https://software.intel.com/en-us/articles/avoiding-avx-sse-transition-penalties). However, the SSE
-// version in MaskedOcclusionCulling.cpp _must_ be compiled without VEX encoding to allow backwards compatibility. Best practice is to 
-// use lowest supported target platform (e.g. /arch:SSE2) as project default, and elevate only the MaskedOcclusionCullingAVX*.cpp files.
-#ifndef __AVX2__
-	#error For best performance, MaskedOcclusionCullingAVX512.cpp should be compiled with /arch:AVX2
+// The MaskedOcclusionCullingAVX512.cpp file should be compiled avx512 architecture options turned on in the compiler. However, the SSE
+// version in MaskedOcclusionCulling.cpp _must_ be compiled with SSE2 architecture allow backwards compatibility. Best practice is to 
+// use lowest supported target platform (e.g. /arch:SSE2) as project default, and elevate only the MaskedOcclusionCullingAVX2/512.cpp files.
+#if !defined(__AVX512F__) || !defined(__AVX512BW__) || !defined(__AVX512DQ__) || !defined(__AVX2__)
+	#error For best performance, MaskedOcclusionCullingAVX512.cpp should be compiled with AVX512 options (-mavx512f -mavx512cd -mavx512bw -mavx512dq -mavx512vl)
 #endif
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

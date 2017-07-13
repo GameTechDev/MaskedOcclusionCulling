@@ -21,10 +21,10 @@
 #include "CompilerSpecific.inl"
 
 #if defined(__AVX__) || defined(__AVX2__)
-	// For performance reasons, the MaskedOcclusionCullingAVX*.cpp files should be compiled with VEX encoding for SSE instructions (to avoid 
-	// AVX-SSE transition penalties, see https://software.intel.com/en-us/articles/avoiding-avx-sse-transition-penalties). However, the SSE
-	// version in MaskedOcclusionCulling.cpp _must_ be compiled without VEX encoding to allow backwards compatibility. Best practice is to 
-	// use lowest supported target platform (/arch:SSE2) as project default, and elevate only the MaskedOcclusionCullingAVX*.cpp files.
+	// For performance reasons, the MaskedOcclusionCullingAVX2/512.cpp files should be compiled with VEX encoding for SSE instructions (to avoid 
+	// AVX-SSE transition penalties, see https://software.intel.com/en-us/articles/avoiding-avx-sse-transition-penalties). However, this file
+	// _must_ be compiled without VEX encoding to allow backwards compatibility. Best practice is to use lowest supported target platform 
+	// (/arch:SSE2) as project default, and elevate only the MaskedOcclusionCullingAVX2/512.cpp files.
 	#error The MaskedOcclusionCulling.cpp should be compiled with lowest supported target platform, e.g. /arch:SSE2
 #endif
 
@@ -53,11 +53,11 @@ static MaskedOcclusionCulling::Implementation DetectCPUFeatures()
 	#define TEST_XMM_YMM               (cpuId.size() >= 1 && TEST_BITS(_xgetbv(0), (1 << 2) | (1 << 1)))
 	#define TEST_OPMASK_ZMM            (cpuId.size() >= 1 && TEST_BITS(_xgetbv(0), (1 << 7) | (1 << 6) | (1 << 5)))
 	#define TEST_BMI1_BMI2_AVX2        (cpuId.size() >= 7 && TEST_BITS(cpuId[7].regs[1], (1 << 3) | (1 << 5) | (1 << 8)))
-	#define TEST_AVX512_F_CD_DQ_BW_VL  (cpuId.size() >= 7 && TEST_BITS(cpuId[7].regs[1], (1 << 16) | (1 << 17) | (1 << 28) | (1 << 30) | (1 << 31)))
+	#define TEST_AVX512_F_BW_DQ        (cpuId.size() >= 7 && TEST_BITS(cpuId[7].regs[1], (1 << 16) | (1 << 17) | (1 << 30)))
 
 	if (TEST_FMA_MOVE_OXSAVE && TEST_LZCNT && TEST_SSE41)
 	{
-		if (TEST_XMM_YMM && TEST_OPMASK_ZMM && TEST_BMI1_BMI2_AVX2 && TEST_AVX512_F_CD_DQ_BW_VL)
+		if (TEST_XMM_YMM && TEST_OPMASK_ZMM && TEST_BMI1_BMI2_AVX2 && TEST_AVX512_F_BW_DQ)
 			return MaskedOcclusionCulling::AVX512;
 		if (TEST_XMM_YMM && TEST_BMI1_BMI2_AVX2)
 			return MaskedOcclusionCulling::AVX2;

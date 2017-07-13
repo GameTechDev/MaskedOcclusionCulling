@@ -100,7 +100,12 @@ template<int N> FORCE_INLINE void VtxFetch4(__mw *v, const unsigned int *inTrisP
 	}
 	VtxFetch4<N - 1>(v, inTrisPtr, triVtx, inVtx, numLanes);
 }
-template<> FORCE_INLINE void VtxFetch4<0>(__mw *v, const unsigned int *inTrisPtr, int triVtx, const float *inVtx, int numLanes) {}
+
+template<> FORCE_INLINE void VtxFetch4<0>(__mw *v, const unsigned int *inTrisPtr, int triVtx, const float *inVtx, int numLanes) 
+{
+	// Workaround for unused parameter warning
+	(void)v; (void)inTrisPtr; (void)triVtx; (void)inVtx; (void)numLanes;
+}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Private class containing the implementation

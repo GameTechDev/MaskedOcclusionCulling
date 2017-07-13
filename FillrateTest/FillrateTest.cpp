@@ -16,12 +16,16 @@
 #include <float.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <intrin.h>
 #include <math.h>
 #include <algorithm>
 #include <vector>
 #include <chrono>
 #include <random>
+#ifdef _WIN32
+	#include <intrin.h>
+#else
+	#include <immintrin.h>
+#endif
 
 #include "../CullingThreadpool.h"
 #include "../MaskedOcclusionCulling.h"
