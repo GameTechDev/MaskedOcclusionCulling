@@ -324,8 +324,7 @@ moc.BinTriangles(triVerts, triIndices, nTris, triLists, binsW, binsW);
 After generating the triangle lists for each bin, the triangles may be rendered using the `RenderTrilist()` function and the rendering region should be
 limited using a scissor rectangle. It should be noted that the `BinTriangles()` function makes assumptions on the size of the bins, and the calling
 application must therefore always compute the scissor region of each bin, relying on the `ComputeBinWidthHeight()` utility function as shown in the 
-example below. Note that the scissor rectangle is specified in pixel coordinates according to OpenGL conventions, i.e. (0,0) is the bottom left corner of 
-the screen and (width, height) is the top right corner.
+example below. Note that the scissor rectangle is specified in screen space coordinates which depends on the `USE_D3D` define.
 
 ```C++
 unsigned int binWidth, binHeight;
