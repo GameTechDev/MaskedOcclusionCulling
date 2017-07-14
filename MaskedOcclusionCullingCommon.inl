@@ -146,11 +146,11 @@ public:
 	// Constructors and state handling
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	MaskedOcclusionCullingPrivate(pfnAlignedAlloc memAlloc, pfnAlignedFree memFree) : mFullscreenScissor(0, 0, 0, 0)
+	MaskedOcclusionCullingPrivate(pfnAlignedAlloc alignedAlloc, pfnAlignedFree alignedFree) : mFullscreenScissor(0, 0, 0, 0)
 	{
 		mMaskedHiZBuffer = nullptr;
-		mAlignedAllocCallback = memAlloc;
-		mAlignedFreeCallback = memFree;
+		mAlignedAllocCallback = alignedAlloc;
+		mAlignedFreeCallback = alignedFree;
 
 		SetNearClipPlane(0.0f);
 		mCSFrustumPlanes[0] = _mm_setr_ps(0.0f, 0.0f, 1.0f, 0.0f);
@@ -220,7 +220,7 @@ public:
 
 		// Allocate masked hierarchical Z buffer (if zero size leave at nullptr)
 		if(mTilesWidth * mTilesHeight > 0)
-			mMaskedHiZBuffer = (ZTile *)mAlignedAllocCallback(32, sizeof(ZTile) * mTilesWidth * mTilesHeight);
+			mMaskedHiZBuffer = (ZTile *)mAlignedAllocCallback(64, sizeof(ZTile) * mTilesWidth * mTilesHeight);
 	}
 
 	void GetResolution(unsigned int &width, unsigned int &height) override

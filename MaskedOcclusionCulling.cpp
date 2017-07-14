@@ -276,10 +276,10 @@ namespace MaskedOcclusionCullingSSE41
 	// Utility function to create a new object using the allocator callbacks
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	MaskedOcclusionCulling *CreateMaskedOcclusionCulling(pfnAlignedAlloc memAlloc, pfnAlignedFree memFree)
+	MaskedOcclusionCulling *CreateMaskedOcclusionCulling(pfnAlignedAlloc alignedAlloc, pfnAlignedFree alignedFree)
 	{
-		MaskedOcclusionCullingPrivate *object = (MaskedOcclusionCullingPrivate *)memAlloc(32, sizeof(MaskedOcclusionCullingPrivate));
-		new (object) MaskedOcclusionCullingPrivate(memAlloc, memFree);
+		MaskedOcclusionCullingPrivate *object = (MaskedOcclusionCullingPrivate *)alignedAlloc(64, sizeof(MaskedOcclusionCullingPrivate));
+		new (object) MaskedOcclusionCullingPrivate(alignedAlloc, alignedFree);
 		return object;
 	}
 };
@@ -379,10 +379,10 @@ namespace MaskedOcclusionCullingSSE2
 	// Utility function to create a new object using the allocator callbacks
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	MaskedOcclusionCulling *CreateMaskedOcclusionCulling(pfnAlignedAlloc memAlloc, pfnAlignedFree memFree)
+	MaskedOcclusionCulling *CreateMaskedOcclusionCulling(pfnAlignedAlloc alignedAlloc, pfnAlignedFree alignedFree)
 	{
-		MaskedOcclusionCullingPrivate *object = (MaskedOcclusionCullingPrivate *)memAlloc(32, sizeof(MaskedOcclusionCullingPrivate));
-		new (object) MaskedOcclusionCullingPrivate(memAlloc, memFree);
+		MaskedOcclusionCullingPrivate *object = (MaskedOcclusionCullingPrivate *)alignedAlloc(64, sizeof(MaskedOcclusionCullingPrivate));
+		new (object) MaskedOcclusionCullingPrivate(alignedAlloc, alignedFree);
 		return object;
 	}
 };
@@ -392,12 +392,12 @@ namespace MaskedOcclusionCullingSSE2
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 namespace MaskedOcclusionCullingAVX512
 {
-	extern MaskedOcclusionCulling *CreateMaskedOcclusionCulling(pfnAlignedAlloc memAlloc, pfnAlignedFree memFree);
+	extern MaskedOcclusionCulling *CreateMaskedOcclusionCulling(pfnAlignedAlloc alignedAlloc, pfnAlignedFree alignedFree);
 }
 
 namespace MaskedOcclusionCullingAVX2
 {
-	extern MaskedOcclusionCulling *CreateMaskedOcclusionCulling(pfnAlignedAlloc memAlloc, pfnAlignedFree memFree);
+	extern MaskedOcclusionCulling *CreateMaskedOcclusionCulling(pfnAlignedAlloc alignedAlloc, pfnAlignedFree alignedFree);
 }
 
 MaskedOcclusionCulling *MaskedOcclusionCulling::Create()
@@ -405,7 +405,7 @@ MaskedOcclusionCulling *MaskedOcclusionCulling::Create()
 	return Create(aligned_alloc, aligned_free);
 }
 
-MaskedOcclusionCulling *MaskedOcclusionCulling::Create(pfnAlignedAlloc memAlloc, pfnAlignedFree memFree)
+MaskedOcclusionCulling *MaskedOcclusionCulling::Create(pfnAlignedAlloc alignedAlloc, pfnAlignedFree alignedFree)
 {
 	MaskedOcclusionCulling *object = nullptr;
 
@@ -413,13 +413,13 @@ MaskedOcclusionCulling *MaskedOcclusionCulling::Create(pfnAlignedAlloc memAlloc,
 
 	// Return best supported version
 	if (object == nullptr && impl >= AVX512)
-		object = MaskedOcclusionCullingAVX512::CreateMaskedOcclusionCulling(memAlloc, memFree);	// Use AVX512 version
+		object = MaskedOcclusionCullingAVX512::CreateMaskedOcclusionCulling(alignedAlloc, alignedFree); // Use AVX512 version
 	if (object == nullptr && impl >= AVX2)
-		object = MaskedOcclusionCullingAVX2::CreateMaskedOcclusionCulling(memAlloc, memFree);	// Use AVX2 version
+		object = MaskedOcclusionCullingAVX2::CreateMaskedOcclusionCulling(alignedAlloc, alignedFree); // Use AVX2 version
 	if (object == nullptr && impl >= SSE41)
-		object = MaskedOcclusionCullingSSE41::CreateMaskedOcclusionCulling(memAlloc, memFree);	// Use SSE4.1 version
+		object = MaskedOcclusionCullingSSE41::CreateMaskedOcclusionCulling(alignedAlloc, alignedFree); // Use SSE4.1 version
 	if (object == nullptr)
-		object = MaskedOcclusionCullingSSE2::CreateMaskedOcclusionCulling(memAlloc, memFree);	// Use SSE2 (slow) version
+		object = MaskedOcclusionCullingSSE2::CreateMaskedOcclusionCulling(alignedAlloc, alignedFree); // Use SSE2 (slow) version
 
 	return object;
 }

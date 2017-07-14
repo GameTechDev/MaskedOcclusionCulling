@@ -228,10 +228,10 @@ public:
 	
 	/*!
 	 * \brief Creates a new object with default state, no z buffer attached/allocated.
-	 * \param memAlloc Pointer to a callback function used when allocating memory 
-	 * \param memFree Pointer to a callback function used when freeing memory 
+	 * \param alignedAlloc Pointer to a callback function used when allocating memory
+	 * \param alignedFree Pointer to a callback function used when freeing memory
 	 */
-	static MaskedOcclusionCulling *Create(pfnAlignedAlloc memAlloc, pfnAlignedFree memFree);
+	static MaskedOcclusionCulling *Create(pfnAlignedAlloc alignedAlloc, pfnAlignedFree alignedFree);
 
 	/*!
 	 * \brief Destroys an object and frees the z buffer memory. Note that you cannot 

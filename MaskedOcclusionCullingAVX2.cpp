@@ -215,10 +215,10 @@ namespace MaskedOcclusionCullingAVX2
 	typedef MaskedOcclusionCulling::pfnAlignedAlloc            pfnAlignedAlloc;
 	typedef MaskedOcclusionCulling::pfnAlignedFree             pfnAlignedFree;
 
-	MaskedOcclusionCulling *CreateMaskedOcclusionCulling(pfnAlignedAlloc memAlloc, pfnAlignedFree memFree)
+	MaskedOcclusionCulling *CreateMaskedOcclusionCulling(pfnAlignedAlloc alignedAlloc, pfnAlignedFree alignedFree)
 	{
-		MaskedOcclusionCullingPrivate *object = (MaskedOcclusionCullingPrivate *)memAlloc(32, sizeof(MaskedOcclusionCullingPrivate));
-		new (object) MaskedOcclusionCullingPrivate(memAlloc, memFree);
+		MaskedOcclusionCullingPrivate *object = (MaskedOcclusionCullingPrivate *)alignedAlloc(64, sizeof(MaskedOcclusionCullingPrivate));
+		new (object) MaskedOcclusionCullingPrivate(alignedAlloc, alignedFree);
 		return object;
 	}
 };
@@ -230,7 +230,7 @@ namespace MaskedOcclusionCullingAVX2
 	typedef MaskedOcclusionCulling::pfnAlignedAlloc            pfnAlignedAlloc;
 	typedef MaskedOcclusionCulling::pfnAlignedFree             pfnAlignedFree;
 
-	MaskedOcclusionCulling *CreateMaskedOcclusionCulling(pfnAlignedAlloc memAlloc, pfnAlignedFree memFree)
+	MaskedOcclusionCulling *CreateMaskedOcclusionCulling(pfnAlignedAlloc alignedAlloc, pfnAlignedFree alignedFree)
 	{
 		return nullptr;
 	}
