@@ -6,8 +6,8 @@ on the hierarchical depth buffer. It lets us efficiently parallelize both covera
 
 ## Requirements
 
-This code is mainly optimized for the AVX-512 and AVX2 instruction sets, and some AVX specific instructions are required for best performance. However, we also provide
-SSE 4.1 and SSE 2 implementations for backwards compatibility. The appropriate implementation will be chosen during run-time based on the CPU's capabilities.
+This code is mainly optimized for AVX capable CPUs. However, we also provide SSE 4.1 and SSE 2 implementations for backwards compatibility. The appropriate 
+implementation will be chosen during run-time based on the CPU's capabilities.
 
 ## Notes on build time
 
@@ -393,6 +393,14 @@ mkdir <path to library>/Example/build
 cd <path to library>/Example/build
 cmake ..
 make
+```
+
+Note that AVX-512 support is only experimental at the moment, and has only been verified through [Intel SDE](https://software.intel.com/en-us/articles/pre-release-license-agreement-for-intel-software-development-emulator-accept-end-user-license-agreement-and-download).
+If using the original visual studio project, you need to "opt in" for AVX-512 support by setting `#define USE_AVX512 1`. When building with CMake you can
+enable AVX support using the `-DUSE_AVX512=ON` option:
+
+```
+cmake -DUSE_AVX512=ON -G"Visual Studio 14 2015 Win64" -T"LLVM-vs2014" ..
 ```
 
 ## Version History

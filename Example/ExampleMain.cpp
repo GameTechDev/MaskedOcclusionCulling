@@ -37,13 +37,14 @@ static void WriteBMP(const char *filename, const unsigned char *data, int w, int
 	short header[] = { 0x4D42, 0, 0, 0, 0, 26, 0, 12, 0, (short)w, (short)h, 1, 24 };
 	FILE *f = fopen(filename, "wb");
 	fwrite(header, 1, sizeof(header), f);
-
-	// Flip image because Y axis of OpenGL points in the opposite direction of bmp. If the 
-	// library is configured for direct3d (USE_D3D) then the Y axes would match and this
-	// wouldn't be required.
+#if USE_D3D == 1
+	// Flip image because Y axis of Direct3D points in the opposite direction of bmp. If the library 
+	// is configured for OpenGL (USE_D3D 0) then the Y axes would match and this wouldn't be required.
 	for (int y = 0; y < h; ++y)
-		fwrite(&data[y*w * 3], 1, w * 3, f);
-
+		fwrite(&data[(h - y - 1) * w * 3], 1, w * 3, f);
+#else
+	fwrite(data, 1, w * h * 3, f);
+#endif
 	fclose(f);
 }
 

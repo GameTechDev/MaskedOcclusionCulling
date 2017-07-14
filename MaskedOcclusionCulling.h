@@ -70,6 +70,15 @@
 
 #endif
 
+#ifndef USE_AVX512
+/*!
+ * Define USE_AVX512 to 1 to enable experimental AVX-512 support. It'currently mostly untested and only
+ * validated on simple examples using Intel SDE. Older compilers may not support AVX-512 intrinsics.
+ */
+#define USE_AVX512          0
+
+#endif
+
 #ifndef ENABLE_STATS
 /*!
  * Define ENABLE_STATS to 1 to gather various statistics during occlusion culling. Can be used for profiling 

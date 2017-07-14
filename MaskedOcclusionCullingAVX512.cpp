@@ -20,7 +20,7 @@
 #include "CompilerSpecific.inl"
 
 // Make sure compiler supports AVX-512 intrinsics. 
-#if (defined(__INTEL_COMPILER) && __INTEL_COMPILER >= 1600) || (defined(__clang__) && __clang_major__ >= 4) || (defined(__GNUC__) && __GNUC__ >= 5)
+#if USE_AVX512 != 0 && ((defined(__INTEL_COMPILER) && __INTEL_COMPILER >= 1600) || (defined(__clang__) && __clang_major__ >= 4) || (defined(__GNUC__) && __GNUC__ >= 5))
 
 // The MaskedOcclusionCullingAVX512.cpp file should be compiled avx512 architecture options turned on in the compiler. However, the SSE
 // version in MaskedOcclusionCulling.cpp _must_ be compiled with SSE2 architecture allow backwards compatibility. Best practice is to 
