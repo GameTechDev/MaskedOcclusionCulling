@@ -35,7 +35,7 @@ We have made an effort to keep the API as simple and minimal as possible. The re
 and we hope they will feel natural to anyone with graphics programming experience. In the following we will use the example project as a tutorial to showcase
 the API. Please refer to the documentation in the header file for further details.
 
-### State
+### Setup
 
 We begin by creating a new instance of the occlusion culling object. The object is created using the static `Create()` function rather than a standard
 constructor, and can be destroyed using the `Destroy()` function. The reason for using the factory `Create()`/`Destroy()` design pattern is that we want to
@@ -163,21 +163,6 @@ moc.RenderTriangles((float*)SoAVerts, triIndices, 1, nullptr, CLIP_PLANE_ALL, nu
 Vertex layout may affect occlusion culling performance. We have seen no large performance impact when using either SoA or AoS layout, but generally speaking the
 vertex position data should be packed as compactly into memory as possible to minimize number of cache misses. It is, for example, not advicable to bundle vertex
 position data together with normals, texture coordinates, etc. and using a large stride.
-
-**Backface culling** The `SetBackfaceWinding()` function can be used to configure which triangles should be backface culled. By default counter-clockwise
-winded triangles are considered frontfacing, and clockwise winded triangles are considered backfacing (`BACKFACE_CW`). You can use this feature to disable backface 
-culling when rendering two-sided occluders, by setting `SetBackfaceWinding(BACKFACE_NONE)`.
-
-```C++
-SetBackfaceWinding(BACKFACE_CW)
-// Render regular occluder geometry
-SetBackfaceWinding(BACKFACE_NONE)
-// Render two-sided occluder geometry
-SetBackfaceWinding(BACKFACE_CW)
-```
-
-Note that the backface winding affects the behavior of both the `RenderTriangles()` and `TestTriangles()` functions. The rasterization code only handles counter-clockwise
-winded triangles, so clockwise winded triangles are re-winded on the fly. Thus, culling modes other than `BACKFACE_CW` may incur a small performance penalty.
 
 ### Occlusion queries
 
@@ -398,7 +383,9 @@ make
 ## Version History
 
 * Version 1.3: 
-  * Added support for AVX-512 and ICC/GCC/Clang support.
+  * **Experimental**: Added support for AVX-512 capable CPUs. Currently only verified through [emulator](https://software.intel.com/en-us/articles/intel-software-development-emulator).
+  * Added multiplatform support. Code now compiles on Visual C++ Compiler, Intel C++ Compiler, GCC, and Clang.
+  * Added configurable backface culling, to support two-sided occluder rendering.
 * Version 1.2: 
   * Added support for threading, through a binning rasterizer. The `CullingThreadpool` class implements an example multi-threaded task system with a very similar 
     API to the `MaskedOcclusionCulling`class.

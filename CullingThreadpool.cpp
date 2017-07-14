@@ -277,7 +277,7 @@ void CullingThreadpool::ThreadMain(unsigned int threadIdx)
 					RenderJobQueue::BinningJob &sjob = job->mBinningJob;
 					for (unsigned int i = 0; i < mNumBins; ++i)
 						job->mRenderJobs[i].mTriIdx = 0;
-					mMOC->BinTriangles(sjob.mVerts, sjob.mTris, sjob.nTris, job->mRenderJobs, mBinsW, mBinsH, sjob.mMatrix, sjob.mClipPlanes, *sjob.mVtxLayout);
+					mMOC->BinTriangles(sjob.mVerts, sjob.mTris, sjob.nTris, job->mRenderJobs, mBinsW, mBinsH, sjob.mMatrix, sjob.mClipPlanes, *sjob.mVtxLayout, sjob.mBfWinding);
 					mRenderQueue->FinishedBinningJob(job);
 				}
 				continue;
@@ -407,12 +407,6 @@ void CullingThreadpool::SetNearClipPlane(float nearDist)
 	mMOC->SetNearClipPlane(nearDist);
 }
 
-void CullingThreadpool::SetBackfaceWinding(MaskedOcclusionCulling::BackfaceWinding winding)
-{
-	Flush(); // TODO: This function should preferably not cause a flush, should be moved to a state such as the matrix / vtx layout
-	mMOC->SetBackfaceWinding(winding);
-}
-
 void CullingThreadpool::SetMatrix(const float *modelToClipMatrix)
 {
 	// Treat nullptr matrix as a special case, otherwise copy the contents of the pointer and add to state
@@ -436,7 +430,7 @@ void CullingThreadpool::ClearBuffer()
 	mMOC->ClearBuffer();
 }
 
-void CullingThreadpool::RenderTriangles(const float *inVtx, const unsigned int *inTris, int nTris, ClipPlanes clipPlaneMask)
+void CullingThreadpool::RenderTriangles(const float *inVtx, const unsigned int *inTris, int nTris, ClipPlanes clipPlaneMask, BackfaceWinding bfWinding)
 {
 	for (int i = 0; i < nTris; i += TRIS_PER_JOB)
 	{
@@ -451,6 +445,7 @@ void CullingThreadpool::RenderTriangles(const float *inVtx, const unsigned int *
 		job->mBinningJob.nTris = nTris - i < TRIS_PER_JOB ? nTris - i : TRIS_PER_JOB;
 		job->mBinningJob.mMatrix = mCurrentMatrix;
 		job->mBinningJob.mClipPlanes = clipPlaneMask;
+		job->mBinningJob.mBfWinding = bfWinding;
 		job->mBinningJob.mVtxLayout = mVertexLayouts.GetData();
 		mRenderQueue->AdvanceWriteJob();
 	}
@@ -461,9 +456,9 @@ CullingThreadpool::CullingResult CullingThreadpool::TestRect(float xmin, float y
 	return mMOC->TestRect(xmin, ymin, xmax, ymax, wmin);
 }
 
-CullingThreadpool::CullingResult CullingThreadpool::TestTriangles(const float *inVtx, const unsigned int *inTris, int nTris, ClipPlanes clipPlaneMask)
+CullingThreadpool::CullingResult CullingThreadpool::TestTriangles(const float *inVtx, const unsigned int *inTris, int nTris, ClipPlanes clipPlaneMask, BackfaceWinding bfWinding)
 {
-	return mMOC->TestTriangles(inVtx, inTris, nTris, mCurrentMatrix, clipPlaneMask, nullptr, *mVertexLayouts.GetData());
+	return mMOC->TestTriangles(inVtx, inTris, nTris, mCurrentMatrix, clipPlaneMask, nullptr, *mVertexLayouts.GetData(), bfWinding);
 }
 
 void CullingThreadpool::ComputePixelDepthBuffer(float *depthData)

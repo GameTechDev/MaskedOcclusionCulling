@@ -44,11 +44,12 @@ class CullingThreadpool
 protected:
 	static const int TRIS_PER_JOB = 1024; // Maximum number of triangles per job (bigger drawcalls are split), affects memory requirements
 
-	typedef MaskedOcclusionCulling::CullingResult	CullingResult;
-	typedef MaskedOcclusionCulling::ClipPlanes		ClipPlanes;
-	typedef MaskedOcclusionCulling::ScissorRect		ScissorRect;
-	typedef MaskedOcclusionCulling::VertexLayout	VertexLayout;
-	typedef MaskedOcclusionCulling::TriList			TriList;
+	typedef MaskedOcclusionCulling::CullingResult   CullingResult;
+	typedef MaskedOcclusionCulling::ClipPlanes      ClipPlanes;
+	typedef MaskedOcclusionCulling::BackfaceWinding BackfaceWinding;
+	typedef MaskedOcclusionCulling::ScissorRect     ScissorRect;
+	typedef MaskedOcclusionCulling::VertexLayout    VertexLayout;
+	typedef MaskedOcclusionCulling::TriList         TriList;
 
 	// Small utility class for 4x4 matrices
 	struct Matrix4x4
@@ -67,33 +68,34 @@ protected:
 	{
 		struct BinningJob
 		{
-			const float*		mVerts;
-			const unsigned int*	mTris;
-			unsigned int		nTris;
+			const float*        mVerts;
+			const unsigned int* mTris;
+			unsigned int        nTris;
 
-			const float*		mMatrix;
-			ClipPlanes			mClipPlanes;
+			const float*        mMatrix;
+			ClipPlanes          mClipPlanes;
+			BackfaceWinding     mBfWinding;
 			const VertexLayout* mVtxLayout;
 		};
 
 		struct Job
 		{
-			volatile unsigned int	mBinningJobStartedIdx;
-			volatile unsigned int	mBinningJobCompletedIdx;
-			BinningJob				mBinningJob;
-			TriList					*mRenderJobs;
+			volatile unsigned int mBinningJobStartedIdx;
+			volatile unsigned int mBinningJobCompletedIdx;
+			BinningJob            mBinningJob;
+			TriList               *mRenderJobs;
 		};
 
-		unsigned int			mNumBins;
-		unsigned int			mMaxJobs;
+		unsigned int          mNumBins;
+		unsigned int          mMaxJobs;
 
-		volatile unsigned int	mWritePtr;
-		std::atomic_uint		mBinningPtr;
-		std::atomic_uint		*mRenderPtrs;
-		std::atomic_uint		*mBinMutexes;
+		volatile unsigned int mWritePtr;
+		std::atomic_uint      mBinningPtr;
+		std::atomic_uint      *mRenderPtrs;
+		std::atomic_uint      *mBinMutexes;
 
-		float					*mTrilistData;
-		Job						*mJobs;
+		float                 *mTrilistData;
+		Job                   *mJobs;
 
 		RenderJobQueue(unsigned int nBins, unsigned int maxJobs);
 		~RenderJobQueue();
@@ -120,9 +122,9 @@ protected:
 	// Internal utility class for state (matrix / vertex layout)
 	template<class T> struct StateData
 	{
-		unsigned int	mMaxJobs;
-		unsigned int	mCurrentIdx;
-		T				*mData;
+		unsigned int mMaxJobs;
+		unsigned int mCurrentIdx;
+		T            *mData;
 
 		StateData(unsigned int maxJobs);
 		~StateData();
@@ -131,29 +133,29 @@ protected:
 	};
 
 	// Number of worker threads and bins
-	unsigned int					mNumThreads;
-	unsigned int					mNumBins;
-	unsigned int					mMaxJobs;
-	unsigned int					mBinsW;
-	unsigned int					mBinsH;
+	unsigned int            mNumThreads;
+	unsigned int            mNumBins;
+	unsigned int            mMaxJobs;
+	unsigned int            mBinsW;
+	unsigned int            mBinsH;
 
 	// Threads and control variables
-	std::mutex						mSuspendedMutex;
-	std::condition_variable			mSuspendedCV;
-	volatile bool					mKillThreads;
-	volatile bool					mSuspendThreads;
-	volatile unsigned int			mNumSuspendedThreads;
-	std::thread						*mThreads;
+	std::mutex              mSuspendedMutex;
+	std::condition_variable mSuspendedCV;
+	volatile bool           mKillThreads;
+	volatile bool           mSuspendThreads;
+	volatile unsigned int   mNumSuspendedThreads;
+	std::thread             *mThreads;
 
 	// State variables and command queue
-	const float						*mCurrentMatrix;
-	StateData<Matrix4x4>			mModelToClipMatrices;
-	StateData<VertexLayout>			mVertexLayouts;
-	RenderJobQueue					*mRenderQueue;
+	const float             *mCurrentMatrix;
+	StateData<Matrix4x4>    mModelToClipMatrices;
+	StateData<VertexLayout> mVertexLayouts;
+	RenderJobQueue          *mRenderQueue;
 
 	// Occlusion culling object and related scissor rectangles
-	ScissorRect						*mRects;
-	MaskedOcclusionCulling			*mMOC;
+	ScissorRect             *mRects;
+	MaskedOcclusionCulling  *mMOC;
 
 	void SetupScissors();
 
@@ -234,13 +236,6 @@ public:
 	 */
 	void SetNearClipPlane(float nearDist);
 
-	/*!
-	* \brief Sets which triangle winding is considered to be backfacing. See 
-	*        MaskedOcclusionCulling::SetBackfaceWinding() for details. This method causes a Flush() to 
-	*        ensure that all unfinished rendering is completed.
-	*/
-	void SetBackfaceWinding(MaskedOcclusionCulling::BackfaceWinding winding);
-
 	/*
 	 * \brief Sets the model to clipspace transform matrix used for the RenderTriangles() and TestTriangles() 
 	 *        function calls. The contents of the matrix is copied, and it's safe to modify it without calling
@@ -280,7 +275,7 @@ public:
 	 * is finished, or make sure to rotate between more buffers than the maximum number of outstanding
 	 * render jobs (see the CullingThreadpool() constructor).
 	 */
-	void RenderTriangles(const float *inVtx, const unsigned int *inTris, int nTris, ClipPlanes clipPlaneMask = MaskedOcclusionCulling::CLIP_PLANE_ALL);
+	void RenderTriangles(const float *inVtx, const unsigned int *inTris, int nTris, ClipPlanes clipPlaneMask = MaskedOcclusionCulling::CLIP_PLANE_ALL, BackfaceWinding bfWinding = MaskedOcclusionCulling::BACKFACE_CW);
 
 	/*
 	 * \brief Occlusion query for a rectangle with a given depth, see MaskedOcclusionCulling::TestRect().
@@ -303,7 +298,7 @@ public:
 	 * <B>Important:</B> See the TestRect() method for a brief discussion about asynchronous occlusion 
 	 * queries.
 	 */
-	CullingResult TestTriangles(const float *inVtx, const unsigned int *inTris, int nTris, ClipPlanes clipPlaneMask = MaskedOcclusionCulling::CLIP_PLANE_ALL);
+	CullingResult TestTriangles(const float *inVtx, const unsigned int *inTris, int nTris, ClipPlanes clipPlaneMask = MaskedOcclusionCulling::CLIP_PLANE_ALL, BackfaceWinding bfWinding = MaskedOcclusionCulling::BACKFACE_CW);
 
 	/*!
 	 * \brief Creates a per-pixel depth buffer from the hierarchical z buffer representation, see

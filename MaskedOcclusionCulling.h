@@ -148,8 +148,8 @@ public:
 		VertexLayout(int stride, int offsetY, int offsetZW) :
 			mStride(stride), mOffsetY(offsetY), mOffsetW(offsetZW) {}
 
-		int mStride;  //< byte stride between vertices
-		int mOffsetY; //< byte offset from X to Y coordinate
+		int mStride;      //!< byte stride between vertices
+		int mOffsetY;     //!< byte offset from X to Y coordinate
 		union {
 			int mOffsetZ; //!< byte offset from X to Z coordinate
 			int mOffsetW; //!< byte offset from X to W coordinate
@@ -168,10 +168,10 @@ public:
 		ScissorRect(int minX, int minY, int maxX, int maxY) :
 			mMinX(minX), mMinY(minY), mMaxX(maxX), mMaxY(maxY) {}
 
-		int mMinX;	//!< Screen space X coordinate for left side of scissor rect, inclusive and must be a multiple of 32
-		int mMinY;	//!< Screen space Y coordinate for bottom side of scissor rect, inclusive and must be a multiple of 8
-		int mMaxX;	//!< Screen space X coordinate for right side of scissor rect, <B>non</B> inclusive and must be a multiple of 32
-		int mMaxY;	//!< Screen space Y coordinate for top side of scissor rect, <B>non</B> inclusive and must be a multiple of 8
+		int mMinX; //!< Screen space X coordinate for left side of scissor rect, inclusive and must be a multiple of 32
+		int mMinY; //!< Screen space Y coordinate for bottom side of scissor rect, inclusive and must be a multiple of 8
+		int mMaxX; //!< Screen space X coordinate for right side of scissor rect, <B>non</B> inclusive and must be a multiple of 32
+		int mMaxY; //!< Screen space Y coordinate for top side of scissor rect, <B>non</B> inclusive and must be a multiple of 8
 	};
 
 	/*!
@@ -185,22 +185,26 @@ public:
 		float		 *mPtr;         //!< Scratchpad buffer allocated by the host application
 	};
 
+	/*!
+	 * Statistics that can be gathered during occluder rendering and visibility to aid debugging 
+	 * and profiling. Must be enabled by changing the ENABLE_STATS define.
+	 */
 	struct OcclusionCullingStatistics
 	{
 		struct
 		{
-			long long mNumProcessedTriangles;
-			long long mNumRasterizedTriangles;
-			long long mNumTilesTraversed;
-			long long mNumTilesUpdated;
+			long long mNumProcessedTriangles;  //!< Number of occluder triangles processed in total
+			long long mNumRasterizedTriangles; //!< Number of occluder triangles passing view frustum and backface culling
+			long long mNumTilesTraversed;      //!< Number of tiles traversed by the rasterizer
+			long long mNumTilesUpdated;        //!< Number of tiles where the hierarchical z buffer was updated
 		} mOccluders;
 
 		struct
 		{
-			long long mNumProcessedRectangles;
-			long long mNumProcessedTriangles;
-			long long mNumRasterizedTriangles;
-			long long mNumTilesTraversed;
+			long long mNumProcessedRectangles; //!< Number of rects processed (TestRect())
+			long long mNumProcessedTriangles;  //!< Number of ocludee triangles processed (TestTriangles())
+			long long mNumRasterizedTriangles; //!< Number of ocludee triangle passing view frustum and backface culling
+			long long mNumTilesTraversed;      //!< Number of tiles traversed by triangle & rect rasterizers
 		} mOccludees;
 	};
 
@@ -266,17 +270,6 @@ public:
 	virtual void SetNearClipPlane(float nearDist) = 0;
 
 	/*!
-	* \brief Sets which triangle winding is considered to be backfacing. Clockwise winding
-	* (BACKFACE_CW) is recommended, and other winding orders may incur a slight performance
-	* penalty. You may use BACKFACE_NONE to disable culling for double sided geometry. Note
-	* that backface winding affects both RenderTriangles() and TestTriangles().
-	*
-	* \param bfWinding Triangle winding order to consider backfacing, must be one one of
-	*        BACKFACE_NONE, BACKFACE_CW and BACKFACE_CCW.
-	*/
-	virtual void SetBackfaceWinding(BackfaceWinding winding) = 0;
-
-	/*!
 	* \brief Gets the distance for the near clipping plane. 
 	*/
 	virtual float GetNearClipPlane() = 0;
@@ -314,10 +307,14 @@ public:
 	 * \param vtxLayout A struct specifying the vertex layout (see struct for detailed 
 	 *        description). For best performance, it is advicable to store position data
 	 *        as compactly in memory as possible.
+	 * \param bfWinding Sets triangle winding order to consider backfacing, must be one one 
+	 *        of (BACKFACE_NONE, BACKFACE_CW and BACKFACE_CCW). Back-facing triangles are culled 
+	 *        and will not be rasterized. You may use BACKFACE_NONE to disable culling for 
+	 *        double sided geometry
 	 * \return Will return VIEW_CULLED if all triangles are either outside the frustum or
 	 *         backface culled, returns VISIBLE otherwise.
 	 */
-	virtual CullingResult RenderTriangles(const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix = nullptr, ClipPlanes clipPlaneMask = CLIP_PLANE_ALL, const ScissorRect *scissor = nullptr, const VertexLayout &vtxLayout = VertexLayout(16, 4, 12)) = 0;
+	virtual CullingResult RenderTriangles(const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix = nullptr, ClipPlanes clipPlaneMask = CLIP_PLANE_ALL, const ScissorRect *scissor = nullptr, const VertexLayout &vtxLayout = VertexLayout(16, 4, 12), BackfaceWinding bfWinding = BACKFACE_CW) = 0;
 
 	/*!
 	 * \brief Occlusion query for a rectangle with a given depth. The rectangle is given 
@@ -368,11 +365,15 @@ public:
 	 * \param vtxLayout A struct specifying the vertex layout (see struct for detailed 
 	 *        description). For best performance, it is advicable to store position data
 	 *        as compactly in memory as possible.
+	 * \param bfWinding Sets triangle winding order to consider backfacing, must be one one
+	 *        of (BACKFACE_NONE, BACKFACE_CW and BACKFACE_CCW). Back-facing triangles are culled
+	 *        and will not be occlusion tested. You may use BACKFACE_NONE to disable culling
+	 *        for double sided geometry
 	 * \return The query will return VISIBLE if the triangle mesh may be visible, OCCLUDED
 	 *         if the mesh is occluded by a previously rendered object, or VIEW_CULLED if all
 	 *         triangles are entirely outside the view frustum or backface culled.
 	 */
-	virtual CullingResult TestTriangles(const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix = nullptr, ClipPlanes clipPlaneMask = CLIP_PLANE_ALL, const ScissorRect *scissor = nullptr, const VertexLayout &vtxLayout = VertexLayout(16, 4, 12)) = 0;
+	virtual CullingResult TestTriangles(const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix = nullptr, ClipPlanes clipPlaneMask = CLIP_PLANE_ALL, const ScissorRect *scissor = nullptr, const VertexLayout &vtxLayout = VertexLayout(16, 4, 12), BackfaceWinding bfWinding = BACKFACE_CW) = 0;
 
 	/*!
 	 * \brief Perform input assembly, clipping , projection, triangle setup, and write
@@ -404,8 +405,12 @@ public:
 	 * \param vtxLayout A struct specifying the vertex layout (see struct for detailed
 	 *        description). For best performance, it is advicable to store position data
 	 *        as compactly in memory as possible.
+	 * \param bfWinding Sets triangle winding order to consider backfacing, must be one one
+	 *        of (BACKFACE_NONE, BACKFACE_CW and BACKFACE_CCW). Back-facing triangles are culled
+	 *        and will not be binned / rasterized. You may use BACKFACE_NONE to disable culling
+	 *        for double sided geometry
 	 */
-	virtual void BinTriangles(const float *inVtx, const unsigned int *inTris, int nTris, TriList *triLists, unsigned int nBinsW, unsigned int nBinsH, const float *modelToClipMatrix = nullptr, ClipPlanes clipPlaneMask = CLIP_PLANE_ALL, const VertexLayout &vtxLayout = VertexLayout(16, 4, 12)) = 0;
+	virtual void BinTriangles(const float *inVtx, const unsigned int *inTris, int nTris, TriList *triLists, unsigned int nBinsW, unsigned int nBinsH, const float *modelToClipMatrix = nullptr, ClipPlanes clipPlaneMask = CLIP_PLANE_ALL, const VertexLayout &vtxLayout = VertexLayout(16, 4, 12), BackfaceWinding bfWinding = BACKFACE_CW) = 0;
 
 	/*!
 	 * \brief Renders all occluder triangles in a trilist. This function can be used in
