@@ -275,7 +275,7 @@ public:
 	 * is finished, or make sure to rotate between more buffers than the maximum number of outstanding
 	 * render jobs (see the CullingThreadpool() constructor).
 	 */
-	void RenderTriangles(const float *inVtx, const unsigned int *inTris, int nTris, ClipPlanes clipPlaneMask = MaskedOcclusionCulling::CLIP_PLANE_ALL, BackfaceWinding bfWinding = MaskedOcclusionCulling::BACKFACE_CW);
+	void RenderTriangles(const float *inVtx, const unsigned int *inTris, int nTris, BackfaceWinding bfWinding = MaskedOcclusionCulling::BACKFACE_CW, ClipPlanes clipPlaneMask = MaskedOcclusionCulling::CLIP_PLANE_ALL);
 
 	/*
 	 * \brief Occlusion query for a rectangle with a given depth, see MaskedOcclusionCulling::TestRect().
@@ -298,7 +298,7 @@ public:
 	 * <B>Important:</B> See the TestRect() method for a brief discussion about asynchronous occlusion 
 	 * queries.
 	 */
-	CullingResult TestTriangles(const float *inVtx, const unsigned int *inTris, int nTris, ClipPlanes clipPlaneMask = MaskedOcclusionCulling::CLIP_PLANE_ALL, BackfaceWinding bfWinding = MaskedOcclusionCulling::BACKFACE_CW);
+	CullingResult TestTriangles(const float *inVtx, const unsigned int *inTris, int nTris, BackfaceWinding bfWinding = MaskedOcclusionCulling::BACKFACE_CW, ClipPlanes clipPlaneMask = MaskedOcclusionCulling::CLIP_PLANE_ALL);
 
 	/*!
 	 * \brief Creates a per-pixel depth buffer from the hierarchical z buffer representation, see

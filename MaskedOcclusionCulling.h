@@ -260,9 +260,9 @@ public:
 	 * \param outBinHeight Output: The height of the single bin in pixels (except for the 
 	 *        bottommost bin height, which is extended to resolution height)
 	 */
-	virtual void ComputeBinWidthHeight( unsigned int nBinsW, unsigned int nBinsH, unsigned int & outBinWidth, unsigned int & outBinHeight ) = 0;
+	virtual void ComputeBinWidthHeight(unsigned int nBinsW, unsigned int nBinsH, unsigned int & outBinWidth, unsigned int & outBinHeight) = 0;
 
-    /*!
+	/*!
 	 * \brief Sets the distance for the near clipping plane. Default is nearDist = 0.
 	 *
 	 * \param nearDist The distance to the near clipping plane, given as clip space w
@@ -295,26 +295,22 @@ public:
 	 *        entries)
 	 * \param modelToClipMatrix all vertices will be transformed by this matrix before
 	 *        performing projection. If nullptr is passed the transform step will be skipped
+	 * \param bfWinding Sets triangle winding order to consider backfacing, must be one one
+	 *        of (BACKFACE_NONE, BACKFACE_CW and BACKFACE_CCW). Back-facing triangles are culled
+	 *        and will not be rasterized. You may use BACKFACE_NONE to disable culling for
+	 *        double sided geometry
 	 * \param clipPlaneMask A mask indicating which clip planes should be considered by the
 	 *        triangle clipper. Can be used as an optimization if your application can 
 	 *        determine (for example during culling) that a group of triangles does not 
 	 *        intersect a certein frustum plane. However, setting an incorrect mask may 
 	 *        cause out of bounds memory accesses.
-	 * \param scissor A scissor rectangle used to limit the active screen area. Note that
-	 *        scissoring is only meant as a means of threading an implementation. The 
-	 *        scissor rectangle coordinates must be a multiple of the tile size (32x8).
-	 *        This argument is optional. Setting scissor to nullptr disables scissoring.
 	 * \param vtxLayout A struct specifying the vertex layout (see struct for detailed 
 	 *        description). For best performance, it is advicable to store position data
 	 *        as compactly in memory as possible.
-	 * \param bfWinding Sets triangle winding order to consider backfacing, must be one one 
-	 *        of (BACKFACE_NONE, BACKFACE_CW and BACKFACE_CCW). Back-facing triangles are culled 
-	 *        and will not be rasterized. You may use BACKFACE_NONE to disable culling for 
-	 *        double sided geometry
 	 * \return Will return VIEW_CULLED if all triangles are either outside the frustum or
 	 *         backface culled, returns VISIBLE otherwise.
 	 */
-	virtual CullingResult RenderTriangles(const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix = nullptr, ClipPlanes clipPlaneMask = CLIP_PLANE_ALL, const ScissorRect *scissor = nullptr, const VertexLayout &vtxLayout = VertexLayout(16, 4, 12), BackfaceWinding bfWinding = BACKFACE_CW) = 0;
+	virtual CullingResult RenderTriangles(const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix = nullptr, BackfaceWinding bfWinding = BACKFACE_CW, ClipPlanes clipPlaneMask = CLIP_PLANE_ALL, const VertexLayout &vtxLayout = VertexLayout(16, 4, 12)) = 0;
 
 	/*!
 	 * \brief Occlusion query for a rectangle with a given depth. The rectangle is given 
@@ -353,27 +349,23 @@ public:
 	 *        entries)
 	 * \param modelToClipMatrix all vertices will be transformed by this matrix before
 	 *        performing projection. If nullptr is passed the transform step will be skipped
+	 * \param bfWinding Sets triangle winding order to consider backfacing, must be one one
+	 *        of (BACKFACE_NONE, BACKFACE_CW and BACKFACE_CCW). Back-facing triangles are culled
+	 *        and will not be occlusion tested. You may use BACKFACE_NONE to disable culling
+	 *        for double sided geometry
 	 * \param clipPlaneMask A mask indicating which clip planes should be considered by the
 	 *        triangle clipper. Can be used as an optimization if your application can
 	 *        determine (for example during culling) that a group of triangles does not
 	 *        intersect a certein frustum plane. However, setting an incorrect mask may
 	 *        cause out of bounds memory accesses.
-	 * \param scissor A scissor rectangle used to limit the active screen area. Note that
-	 *        scissoring is only meant as a means of threading an implementation. The
-	 *        scissor rectangle coordinates must be a multiple of the tile size (32x8).
-	 *        This argument is optional. Setting scissor to nullptr disables scissoring.
 	 * \param vtxLayout A struct specifying the vertex layout (see struct for detailed 
 	 *        description). For best performance, it is advicable to store position data
 	 *        as compactly in memory as possible.
-	 * \param bfWinding Sets triangle winding order to consider backfacing, must be one one
-	 *        of (BACKFACE_NONE, BACKFACE_CW and BACKFACE_CCW). Back-facing triangles are culled
-	 *        and will not be occlusion tested. You may use BACKFACE_NONE to disable culling
-	 *        for double sided geometry
 	 * \return The query will return VISIBLE if the triangle mesh may be visible, OCCLUDED
 	 *         if the mesh is occluded by a previously rendered object, or VIEW_CULLED if all
 	 *         triangles are entirely outside the view frustum or backface culled.
 	 */
-	virtual CullingResult TestTriangles(const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix = nullptr, ClipPlanes clipPlaneMask = CLIP_PLANE_ALL, const ScissorRect *scissor = nullptr, const VertexLayout &vtxLayout = VertexLayout(16, 4, 12), BackfaceWinding bfWinding = BACKFACE_CW) = 0;
+	virtual CullingResult TestTriangles(const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix = nullptr, BackfaceWinding bfWinding = BACKFACE_CW, ClipPlanes clipPlaneMask = CLIP_PLANE_ALL, const VertexLayout &vtxLayout = VertexLayout(16, 4, 12)) = 0;
 
 	/*!
 	 * \brief Perform input assembly, clipping , projection, triangle setup, and write
@@ -410,7 +402,7 @@ public:
 	 *        and will not be binned / rasterized. You may use BACKFACE_NONE to disable culling
 	 *        for double sided geometry
 	 */
-	virtual void BinTriangles(const float *inVtx, const unsigned int *inTris, int nTris, TriList *triLists, unsigned int nBinsW, unsigned int nBinsH, const float *modelToClipMatrix = nullptr, ClipPlanes clipPlaneMask = CLIP_PLANE_ALL, const VertexLayout &vtxLayout = VertexLayout(16, 4, 12), BackfaceWinding bfWinding = BACKFACE_CW) = 0;
+	virtual void BinTriangles(const float *inVtx, const unsigned int *inTris, int nTris, TriList *triLists, unsigned int nBinsW, unsigned int nBinsH, const float *modelToClipMatrix = nullptr, BackfaceWinding bfWinding = BACKFACE_CW, ClipPlanes clipPlaneMask = CLIP_PLANE_ALL, const VertexLayout &vtxLayout = VertexLayout(16, 4, 12)) = 0;
 
 	/*!
 	 * \brief Renders all occluder triangles in a trilist. This function can be used in

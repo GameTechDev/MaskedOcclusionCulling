@@ -37,7 +37,13 @@ static void WriteBMP(const char *filename, const unsigned char *data, int w, int
 	short header[] = { 0x4D42, 0, 0, 0, 0, 26, 0, 12, 0, (short)w, (short)h, 1, 24 };
 	FILE *f = fopen(filename, "wb");
 	fwrite(header, 1, sizeof(header), f);
-	fwrite(data, 1, w * h * 3, f);
+
+	// Flip image because Y axis of OpenGL points in the opposite direction of bmp. If the 
+	// library is configured for direct3d (USE_D3D) then the Y axes would match and this
+	// wouldn't be required.
+	for (int y = 0; y < h; ++y)
+		fwrite(&data[y*w * 3], 1, w * 3, f);
+
 	fclose(f);
 }
 
@@ -114,13 +120,20 @@ int main(int argc, char* argv[])
 	// Render the triangle
 	moc->RenderTriangles((float*)triVerts, triIndices, 1);
 
+	// A clockwise winded (backfacing) triangle
+	ClipspaceVertex cwTriVerts[] = { { 7, -7, 0, 20 },{ 7.5, -7, 0, 20 },{ 7, -7.5, 0, 20 } };
+	unsigned int cwTriIndices[] = { 0, 1, 2 };
+
+	// Render with counter-clockwise backface culling, the triangle is rendered
+	moc->RenderTriangles((float*)cwTriVerts, cwTriIndices, 1, nullptr, MaskedOcclusionCulling::BACKFACE_CCW);
+
 	// A quad completely within the view frustum
 	ClipspaceVertex quadVerts[] = { { -150, -150, 0, 200 }, { -10, -65, 0, 75 }, { 0, 0, 0, 20 }, { -40, 10, 0, 50 } };
 	unsigned int quadIndices[] = { 0, 1, 2, 0, 2, 3 };
 
 	// Render the quad. As an optimization, indicate that clipping is not required as it is 
 	// completely inside the view frustum
-	moc->RenderTriangles((float*)quadVerts, quadIndices, 2, nullptr, MaskedOcclusionCulling::CLIP_PLANE_NONE);
+	moc->RenderTriangles((float*)quadVerts, quadIndices, 2, nullptr, MaskedOcclusionCulling::BACKFACE_CW, MaskedOcclusionCulling::CLIP_PLANE_NONE);
 
 	// A triangle specified on struct of arrays (SoA) form
 	float SoAVerts[] = {
@@ -133,7 +146,7 @@ int main(int argc, char* argv[])
 	MaskedOcclusionCulling::VertexLayout SoAVertexLayout(sizeof(float), 3 * sizeof(float), 6 * sizeof(float));
 
 	// Render triangle with SoA layout
-	moc->RenderTriangles((float*)SoAVerts, triIndices, 1, nullptr, MaskedOcclusionCulling::CLIP_PLANE_ALL, nullptr, SoAVertexLayout);
+	moc->RenderTriangles((float*)SoAVerts, triIndices, 1, nullptr, MaskedOcclusionCulling::BACKFACE_CW, MaskedOcclusionCulling::CLIP_PLANE_ALL, SoAVertexLayout);
 
 
 	////////////////////////////////////////////////////////////////////////////////////////

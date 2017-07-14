@@ -210,7 +210,7 @@ void CullingThreadpool::SetupScissors()
 
 	unsigned int binWidth;
 	unsigned int binHeight;
-	mMOC->ComputeBinWidthHeight( mBinsW, mBinsH, binWidth, binHeight );
+	mMOC->ComputeBinWidthHeight(mBinsW, mBinsH, binWidth, binHeight);
 
 	for (unsigned int ty = 0; ty < mBinsH; ++ty)
 	{
@@ -277,7 +277,7 @@ void CullingThreadpool::ThreadMain(unsigned int threadIdx)
 					RenderJobQueue::BinningJob &sjob = job->mBinningJob;
 					for (unsigned int i = 0; i < mNumBins; ++i)
 						job->mRenderJobs[i].mTriIdx = 0;
-					mMOC->BinTriangles(sjob.mVerts, sjob.mTris, sjob.nTris, job->mRenderJobs, mBinsW, mBinsH, sjob.mMatrix, sjob.mClipPlanes, *sjob.mVtxLayout, sjob.mBfWinding);
+					mMOC->BinTriangles(sjob.mVerts, sjob.mTris, sjob.nTris, job->mRenderJobs, mBinsW, mBinsH, sjob.mMatrix, sjob.mBfWinding, sjob.mClipPlanes, *sjob.mVtxLayout);
 					mRenderQueue->FinishedBinningJob(job);
 				}
 				continue;
@@ -430,7 +430,7 @@ void CullingThreadpool::ClearBuffer()
 	mMOC->ClearBuffer();
 }
 
-void CullingThreadpool::RenderTriangles(const float *inVtx, const unsigned int *inTris, int nTris, ClipPlanes clipPlaneMask, BackfaceWinding bfWinding)
+void CullingThreadpool::RenderTriangles(const float *inVtx, const unsigned int *inTris, int nTris, BackfaceWinding bfWinding, ClipPlanes clipPlaneMask)
 {
 	for (int i = 0; i < nTris; i += TRIS_PER_JOB)
 	{
@@ -456,9 +456,9 @@ CullingThreadpool::CullingResult CullingThreadpool::TestRect(float xmin, float y
 	return mMOC->TestRect(xmin, ymin, xmax, ymax, wmin);
 }
 
-CullingThreadpool::CullingResult CullingThreadpool::TestTriangles(const float *inVtx, const unsigned int *inTris, int nTris, ClipPlanes clipPlaneMask, BackfaceWinding bfWinding)
+CullingThreadpool::CullingResult CullingThreadpool::TestTriangles(const float *inVtx, const unsigned int *inTris, int nTris, BackfaceWinding bfWinding, ClipPlanes clipPlaneMask)
 {
-	return mMOC->TestTriangles(inVtx, inTris, nTris, mCurrentMatrix, clipPlaneMask, nullptr, *mVertexLayouts.GetData(), bfWinding);
+	return mMOC->TestTriangles(inVtx, inTris, nTris, mCurrentMatrix, bfWinding, clipPlaneMask, *mVertexLayouts.GetData());
 }
 
 void CullingThreadpool::ComputePixelDepthBuffer(float *depthData)

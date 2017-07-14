@@ -152,7 +152,7 @@ public:
 		mAlignedAllocCallback = memAlloc;
 		mAlignedFreeCallback = memFree;
 
-		SetNearClipPlane( 0.0f );
+		SetNearClipPlane(0.0f);
 		mCSFrustumPlanes[0] = _mm_setr_ps(0.0f, 0.0f, 1.0f, 0.0f);
 		mCSFrustumPlanes[1] = _mm_setr_ps(1.0f, 0.0f, 1.0f, 0.0f);
 		mCSFrustumPlanes[2] = _mm_setr_ps(-1.0f, 0.0f, 1.0f, 0.0f);
@@ -161,7 +161,7 @@ public:
 
 		memset(&mStats, 0, sizeof(OcclusionCullingStatistics));
 
-		SetResolution( 0, 0 );
+		SetResolution(0, 0);
 	}
 
 	~MaskedOcclusionCullingPrivate() override
@@ -219,7 +219,7 @@ public:
 		mCSFrustumPlanes[4] = _mm_setr_ps(0.0f, -1.0f + guardBandHeight, 1.0f, 0.0f);
 
 		// Allocate masked hierarchical Z buffer (if zero size leave at nullptr)
-		if( mTilesWidth * mTilesHeight > 0 )
+		if(mTilesWidth * mTilesHeight > 0)
 			mMaskedHiZBuffer = (ZTile *)mAlignedAllocCallback(32, sizeof(ZTile) * mTilesWidth * mTilesHeight);
 	}
 
@@ -229,7 +229,7 @@ public:
 		height = mHeight;
 	}
 
-	void ComputeBinWidthHeight( unsigned int nBinsW, unsigned int nBinsH, unsigned int & outBinWidth, unsigned int & outBinHeight ) override
+	void ComputeBinWidthHeight(unsigned int nBinsW, unsigned int nBinsH, unsigned int & outBinWidth, unsigned int & outBinHeight) override
 	{
 		outBinWidth = (mWidth / nBinsW) - ((mWidth / nBinsW) % TILE_WIDTH);
 		outBinHeight = (mHeight / nBinsH) - ((mHeight / nBinsH) % TILE_HEIGHT);
@@ -1341,7 +1341,7 @@ public:
 	}
 
 	template<int TEST_Z, int FAST_GATHER>
-	FORCE_INLINE CullingResult RenderTriangles(const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix, ClipPlanes clipPlaneMask, const ScissorRect *scissor, const VertexLayout &vtxLayout, BackfaceWinding bfWinding)
+	FORCE_INLINE CullingResult RenderTriangles(const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix, BackfaceWinding bfWinding, ClipPlanes clipPlaneMask, const VertexLayout &vtxLayout)
 	{
 		assert(mMaskedHiZBuffer != nullptr);
 
@@ -1359,9 +1359,6 @@ public:
 		int clipTail = 0;
 		__m128 clipTriBuffer[MAX_CLIPPED * 3];
 		int cullResult = CullingResult::VIEW_CULLED;
-
-		// Setup fullscreen scissor rect as default
-		scissor = scissor == nullptr ? &mFullscreenScissor : scissor;
 
 		const unsigned int *inTrisPtr = inTris;
 		int numLanes = SIMD_LANES;
@@ -1469,9 +1466,9 @@ public:
 			// Setup and rasterize a SIMD batch of triangles
 			//////////////////////////////////////////////////////////////////////////////
 #if PRECISE_COVERAGE != 0
-			cullResult &= RasterizeTriangleBatch<TEST_Z>(ipVtxX, ipVtxY, pVtxX, pVtxY, pVtxZ, triMask, scissor);
+			cullResult &= RasterizeTriangleBatch<TEST_Z>(ipVtxX, ipVtxY, pVtxX, pVtxY, pVtxZ, triMask, &mFullscreenScissor);
 #else
-			cullResult &= RasterizeTriangleBatch<TEST_Z>(pVtxX, pVtxY, pVtxZ, triMask, scissor);
+			cullResult &= RasterizeTriangleBatch<TEST_Z>(pVtxX, pVtxY, pVtxZ, triMask, &mFullscreenScissor);
 #endif
 
 			if (TEST_Z && cullResult == CullingResult::VISIBLE) {
@@ -1488,24 +1485,24 @@ public:
 		return (CullingResult)cullResult;
 	}
 
-	CullingResult RenderTriangles(const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix, ClipPlanes clipPlaneMask, const ScissorRect *scissor, const VertexLayout &vtxLayout, BackfaceWinding bfWinding) override
+	CullingResult RenderTriangles(const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix, BackfaceWinding bfWinding, ClipPlanes clipPlaneMask, const VertexLayout &vtxLayout) override
 	{
 		if (vtxLayout.mStride == 16 && vtxLayout.mOffsetY == 4 && vtxLayout.mOffsetW == 12)
-			return (CullingResult)RenderTriangles<0, 1>(inVtx, inTris, nTris, modelToClipMatrix, clipPlaneMask, scissor, vtxLayout, bfWinding);
+			return (CullingResult)RenderTriangles<0, 1>(inVtx, inTris, nTris, modelToClipMatrix, bfWinding, clipPlaneMask, vtxLayout);
 
-		return (CullingResult)RenderTriangles<0, 0>(inVtx, inTris, nTris, modelToClipMatrix, clipPlaneMask, scissor, vtxLayout, bfWinding);
+		return (CullingResult)RenderTriangles<0, 0>(inVtx, inTris, nTris, modelToClipMatrix, bfWinding, clipPlaneMask, vtxLayout);
 	}
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Occlusion query functions
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	CullingResult TestTriangles(const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix, ClipPlanes clipPlaneMask, const ScissorRect *scissor, const VertexLayout &vtxLayout, BackfaceWinding bfWinding) override
+	CullingResult TestTriangles(const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix, BackfaceWinding bfWinding, ClipPlanes clipPlaneMask, const VertexLayout &vtxLayout) override
 	{
 		if (vtxLayout.mStride == 16 && vtxLayout.mOffsetY == 4 && vtxLayout.mOffsetW == 12)
-			return (CullingResult)RenderTriangles<1, 1>(inVtx, inTris, nTris, modelToClipMatrix, clipPlaneMask, scissor, vtxLayout, bfWinding);
+			return (CullingResult)RenderTriangles<1, 1>(inVtx, inTris, nTris, modelToClipMatrix, bfWinding, clipPlaneMask, vtxLayout);
 
-		return (CullingResult)RenderTriangles<1, 0>(inVtx, inTris, nTris, modelToClipMatrix, clipPlaneMask, scissor, vtxLayout, bfWinding);
+		return (CullingResult)RenderTriangles<1, 0>(inVtx, inTris, nTris, modelToClipMatrix, bfWinding, clipPlaneMask, vtxLayout);
 	}
 
 	CullingResult TestRect(float xmin, float ymin, float xmax, float ymax, float wmin) const override
@@ -1607,7 +1604,7 @@ public:
 	}
 
 	template<bool FAST_GATHER>
-	FORCE_INLINE void BinTriangles(const float *inVtx, const unsigned int *inTris, int nTris, TriList *triLists, unsigned int nBinsW, unsigned int nBinsH, const float *modelToClipMatrix, ClipPlanes clipPlaneMask, const VertexLayout &vtxLayout, BackfaceWinding bfWinding)
+	FORCE_INLINE void BinTriangles(const float *inVtx, const unsigned int *inTris, int nTris, TriList *triLists, unsigned int nBinsW, unsigned int nBinsH, const float *modelToClipMatrix, BackfaceWinding bfWinding, ClipPlanes clipPlaneMask, const VertexLayout &vtxLayout)
 	{
 		assert(mMaskedHiZBuffer != nullptr);
 
@@ -1729,7 +1726,7 @@ public:
 
 			unsigned int binWidth;
 			unsigned int binHeight;
-			ComputeBinWidthHeight( nBinsW, nBinsH, binWidth, binHeight );
+			ComputeBinWidthHeight(nBinsW, nBinsH, binWidth, binHeight);
 
 			// Compute pixel bounding box
 			__mwi bbPixelMinX, bbPixelMinY, bbPixelMaxX, bbPixelMaxY;
@@ -1772,12 +1769,12 @@ public:
 #endif
 	}
 
-	void BinTriangles(const float *inVtx, const unsigned int *inTris, int nTris, TriList *triLists, unsigned int nBinsW, unsigned int nBinsH, const float *modelToClipMatrix, ClipPlanes clipPlaneMask, const VertexLayout &vtxLayout, BackfaceWinding bfWinding) override
+	void BinTriangles(const float *inVtx, const unsigned int *inTris, int nTris, TriList *triLists, unsigned int nBinsW, unsigned int nBinsH, const float *modelToClipMatrix, BackfaceWinding bfWinding, ClipPlanes clipPlaneMask, const VertexLayout &vtxLayout) override
 	{
 		if (vtxLayout.mStride == 16 && vtxLayout.mOffsetY == 4 && vtxLayout.mOffsetW == 12)
-			BinTriangles<true>(inVtx, inTris, nTris, triLists, nBinsW, nBinsH, modelToClipMatrix, clipPlaneMask, vtxLayout, bfWinding);
+			BinTriangles<true>(inVtx, inTris, nTris, triLists, nBinsW, nBinsH, modelToClipMatrix, bfWinding, clipPlaneMask, vtxLayout);
 		else
-			BinTriangles<false>(inVtx, inTris, nTris, triLists, nBinsW, nBinsH, modelToClipMatrix, clipPlaneMask, vtxLayout, bfWinding);
+			BinTriangles<false>(inVtx, inTris, nTris, triLists, nBinsW, nBinsH, modelToClipMatrix, bfWinding, clipPlaneMask, vtxLayout);
 	}
 
 	void RenderTrilist(const TriList &triList, const ScissorRect *scissor) override
