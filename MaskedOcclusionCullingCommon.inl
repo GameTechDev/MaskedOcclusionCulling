@@ -549,7 +549,7 @@ public:
 		}
 	}
 
-	FORCE_INLINE int CullBackfaces(__mwi *ipVtxX, __mwi *ipVtxY, __mw *pVtxX, __mw *pVtxY, __mw *pVtxZ, __mw ccwMask, BackfaceWinding bfWinding)
+	FORCE_INLINE int CullBackfaces(__mwi *ipVtxX, __mwi *ipVtxY, __mw *pVtxX, __mw *pVtxY, __mw *pVtxZ, const __mw &ccwMask, BackfaceWinding bfWinding)
 	{
 		// Reverse vertex order if non cw faces are considered front facing (rasterizer code requires CCW order)
 		if (!(bfWinding & BACKFACE_CW))
@@ -561,8 +561,8 @@ public:
 			tmpX = _mmw_blendv_ps(pVtxX[2], pVtxX[0], ccwMask);
 			tmpY = _mmw_blendv_ps(pVtxY[2], pVtxY[0], ccwMask);
 			tmpZ = _mmw_blendv_ps(pVtxZ[2], pVtxZ[0], ccwMask);
-			ipVtxX[2] = _mmw_blendv_ps(ipVtxX[0], ipVtxX[2], simd_cast<__mwi>(ccwMask));
-			ipVtxY[2] = _mmw_blendv_ps(ipVtxY[0], ipVtxY[2], simd_cast<__mwi>(ccwMask));
+			ipVtxX[2] = _mmw_blendv_epi32(ipVtxX[0], ipVtxX[2], simd_cast<__mwi>(ccwMask));
+			ipVtxY[2] = _mmw_blendv_epi32(ipVtxY[0], ipVtxY[2], simd_cast<__mwi>(ccwMask));
 			pVtxX[2] = _mmw_blendv_ps(pVtxX[0], pVtxX[2], ccwMask);
 			pVtxY[2] = _mmw_blendv_ps(pVtxY[0], pVtxY[2], ccwMask);
 			pVtxZ[2] = _mmw_blendv_ps(pVtxZ[0], pVtxZ[2], ccwMask);
@@ -597,7 +597,7 @@ public:
 		}
 	}
 
-	FORCE_INLINE int CullBackfaces(__mw *pVtxX, __mw *pVtxY, __mw *pVtxZ, __mw ccwMask, BackfaceWinding bfWinding)
+	FORCE_INLINE int CullBackfaces(__mw *pVtxX, __mw *pVtxY, __mw *pVtxZ, const __mw &ccwMask, BackfaceWinding bfWinding)
 	{
 		// Reverse vertex order if non cw faces are considered front facing (rasterizer code requires CCW order)
 		if (!(bfWinding & BACKFACE_CW))

@@ -1,5 +1,5 @@
 cmake_minimum_required( VERSION 2.6 )
-project( Example )
+project( FillrateTest )
 set(CMAKE_SUPPRESS_REGENERATION true)
 set(CMAKE_CONFIGURATION_TYPES Debug Release)
 
@@ -20,9 +20,9 @@ endif()
 #
 # Build executable
 #
-add_executable(Example ExampleMain.cpp)
+add_executable(FillrateTest FillrateTest.cpp)
 
 #
 # Link with the occlusion culling library
 #
-target_link_libraries (Example LINK_PUBLIC MaskedOcclusionCulling)
+target_link_libraries (FillrateTest LINK_PUBLIC MaskedOcclusionCulling)

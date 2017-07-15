@@ -272,7 +272,7 @@ double BenchmarkTriangles(float *verts, unsigned int *tris, int numTriangles, Ma
 	moc->ClearBuffer();
 
 	auto before = std::chrono::high_resolution_clock::now();
-	moc->RenderTriangles(verts, tris, numTriangles, nullptr, MaskedOcclusionCulling::CLIP_PLANE_NONE);
+	moc->RenderTriangles(verts, tris, numTriangles, nullptr, MaskedOcclusionCulling::BACKFACE_CW, MaskedOcclusionCulling::CLIP_PLANE_NONE);
 	auto after = std::chrono::high_resolution_clock::now();
 
 	return std::chrono::duration<double>(after - before).count();
@@ -283,7 +283,7 @@ double BenchmarkTrianglesThreaded(float *verts, unsigned int *tris, int numTrian
 	ctp->ClearBuffer();
 
 	auto before = std::chrono::high_resolution_clock::now();
-	ctp->RenderTriangles(verts, tris, numTriangles, MaskedOcclusionCulling::CLIP_PLANE_NONE);
+	ctp->RenderTriangles(verts, tris, numTriangles, MaskedOcclusionCulling::BACKFACE_CW, MaskedOcclusionCulling::CLIP_PLANE_NONE);
 	ctp->Flush();
 	auto after = std::chrono::high_resolution_clock::now();
 

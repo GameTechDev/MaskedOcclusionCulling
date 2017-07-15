@@ -389,9 +389,9 @@ cmake -G"Visual Studio 14 2015 Win64" -T"LLVM-vs2014" ..
 or build the library with G++/Clang on linux systems (the `D3DValidate` sample only works on Windows as it relies on Direct 3D)
 
 ```
-mkdir <path to library>/Example/build
-cd <path to library>/Example/build
-cmake ..
+mkdir <path to library>/Example/Release
+cd <path to library>/Example/Release
+cmake -DCMAKE_BUILD_TYPE=Release ..
 make
 ```
 
