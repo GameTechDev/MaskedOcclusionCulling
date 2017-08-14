@@ -225,7 +225,6 @@ bool D3DValidateTriangle(float *verts, MaskedOcclusionCulling *moc)
 	// Compare rasterized coverage
 	////////////////////////////////////////////////////////////////////////////////////////
 
-	unsigned char *pD3D = (unsigned char*)map.pData;
 	bool identical = true;
 	for (unsigned int y = 0; y < height; ++y)
 	{
