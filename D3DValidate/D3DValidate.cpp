@@ -22,6 +22,7 @@
 #include <random>
 
 #include "../MaskedOcclusionCulling.h"
+#include "../CullingThreadpool.h"
 
 std::mt19937 gRnd;
 std::uniform_real_distribution<float> gRndUniform(0, 1);
@@ -55,14 +56,14 @@ ID3D11Query					*endQuery;
 
 #define D3DVERIFY(X) if (X != S_OK) exit(1);
 
-void InitD3D(unsigned int width, unsigned int height)
+void InitD3D(unsigned int width, unsigned int height, D3D_DRIVER_TYPE DriverType = D3D_DRIVER_TYPE_HARDWARE)
 {
 	const char *shader =
 		"float4 VShader(float4 position : POSITION) : SV_POSITION { return position; }"
 		"float4 PShader(float4 position : SV_POSITION) : SV_TARGET { return 1.0f - position.z; }";
 
 	D3D_FEATURE_LEVEL fLevel;
-	D3DVERIFY(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0, nullptr, 0, D3D11_SDK_VERSION, &device, &fLevel, &context));
+	D3DVERIFY(D3D11CreateDevice(nullptr, DriverType, nullptr, 0, nullptr, 0, D3D11_SDK_VERSION, &device, &fLevel, &context));
 
 	D3D11_TEXTURE2D_DESC tDesc;
 	tDesc.Width = width;
@@ -244,6 +245,88 @@ bool D3DValidateTriangle(float *verts, MaskedOcclusionCulling *moc)
 	return identical;
 }
 
+bool D3DValidateTriangleThreaded(float *verts, unsigned int width, unsigned int height, CullingThreadpool *ctp)
+{
+
+	////////////////////////////////////////////////////////////////////////////////////////
+	// Draw triangle using our framework and read back depth buffer
+	////////////////////////////////////////////////////////////////////////////////////////
+
+	// Draw triangle using our framework
+	unsigned int indices[3] = { 0,1,2 };
+	ctp->ClearBuffer();
+	ctp->RenderTriangles(verts, indices, 1);
+	ctp->Flush();
+
+
+	// Read back result
+	float *depthBuffer = new float[width*height];
+	ctp->ComputePixelDepthBuffer(depthBuffer);
+
+	////////////////////////////////////////////////////////////////////////////////////////
+	// Draw triangle using DirectX 11 and read back color image
+	////////////////////////////////////////////////////////////////////////////////////////
+
+	// Create D3D buffer
+	ID3D11Buffer *buf = nullptr;
+
+	D3D11_SUBRESOURCE_DATA iData;
+	iData.pSysMem = verts;
+	iData.SysMemPitch = 0;
+	iData.SysMemSlicePitch = 0;
+
+	D3D11_BUFFER_DESC bDesc;
+	bDesc.Usage = D3D11_USAGE_DEFAULT;
+	bDesc.ByteWidth = 3 * 4 * sizeof(float);
+	bDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+	bDesc.CPUAccessFlags = bDesc.MiscFlags = bDesc.StructureByteStride = 0;
+	D3DVERIFY(device->CreateBuffer(&bDesc, &iData, &buf));
+
+	// Clear renderbuffers
+	float clearColor[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+	context->OMSetRenderTargets(1, &textureRTV, textureDSV);
+	context->ClearRenderTargetView(textureRTV, clearColor);
+	context->ClearDepthStencilView(textureDSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
+
+	// Draw triangle using D3D
+	UINT stride = sizeof(float) * 4, offset = 0;
+	context->IASetVertexBuffers(0, 1, &buf, &stride, &offset);
+	context->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	context->Draw(3, 0);
+
+	buf->Release();
+
+	// Read back resulting D3D image 
+	unsigned char *d3dimg = new unsigned char[width * height * 4];
+	D3D11_MAPPED_SUBRESOURCE map;
+	context->CopyResource(staging, textureCol);
+	context->Map(staging, 0, D3D11_MAP_READ, 0, &map);
+	memcpy(d3dimg, map.pData, width*height * 4);
+	context->Unmap(staging, 0);
+
+	////////////////////////////////////////////////////////////////////////////////////////
+	// Compare rasterized coverage
+	////////////////////////////////////////////////////////////////////////////////////////
+
+	bool identical = true;
+	for (unsigned int y = 0; y < height; ++y)
+	{
+		for (unsigned int x = 0; x < width; ++x)
+		{
+			bool d3dcov = (d3dimg[(x + y*width) * 4] + d3dimg[(x + y*width) * 4 + 1] + d3dimg[(x + y*width) * 4 + 2]) != 0;
+			bool ourcov = depthBuffer[x + y*width] != -1.0f;
+
+			if (d3dcov != ourcov)
+				identical = false;
+		}
+	}
+
+	delete[] depthBuffer;
+	delete[] d3dimg;
+
+	return identical;
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////
 // Random triangle generator
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -270,6 +353,25 @@ void RandomTriangle(float *verts)
 	}
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////
+// Simple Command Line parser
+////////////////////////////////////////////////////////////////////////////////////////
+
+char* getCmdOption(char ** begin, char ** end, const std::string & option)
+{
+	char ** itr = std::find(begin, end, option);
+	if (itr != end && ++itr != end)
+	{
+		return *itr;
+	}
+	return 0;
+}
+
+bool cmdOptionExists(char** begin, char** end, const std::string& option)
+{
+	return std::find(begin, end, option) != end;
+}
 ////////////////////////////////////////////////////////////////////////////////////////
 // Main: Validate a large number of randomized triangles
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -281,14 +383,44 @@ int main(int argc, char* argv[])
 	// Flush denorms to zero to avoid performance issues with small values
 	_mm_setcsr(_mm_getcsr() | 0x8040);
 
+	if (cmdOptionExists(argv, argv + argc, "-h"))
+	{
+		printf("-Help\n");
+		printf("ValidateTest [-a <WARP> <REF>]\n");
+		exit(0);
+	}
+
+	char * pOptions = getCmdOption(argv, argv + argc, "-a");
+
 	// Initialize directx
-	InitD3D(width, height);
+	if (pOptions)
+	{
+		if (!strncmp(pOptions, "WARP", strlen(pOptions)))
+		{
+			printf("Testing against WARP\n");
+			InitD3D(width, height, D3D_DRIVER_TYPE_WARP);
+		}
+
+		if (!strncmp(pOptions, "REF", strlen(pOptions)))
+		{
+			printf("Testing against REF\n");
+			InitD3D(width, height, D3D_DRIVER_TYPE_REFERENCE);
+		}
+
+	}
+	else
+	{
+		printf("Testing against Hardware\n");
+		InitD3D(width, height);
+	}
+
 
 	MaskedOcclusionCulling *moc = MaskedOcclusionCulling::Create();
 
 	////////////////////////////////////////////////////////////////////////////////////////
 	// Setup and state related code
 	////////////////////////////////////////////////////////////////////////////////////////
+
 
 	// Setup a rendertarget with near clip plane at w = 1.0
 	moc->SetResolution(width, height);
@@ -310,4 +442,30 @@ int main(int argc, char* argv[])
 			printf("Testing triangle %d\n", i);
 	}
 	printf("%d / %d triangles passed\n", nPassed, nTriangles);
+
+	int numThreads = std::thread::hardware_concurrency() - 1;
+	printf("\n\nTesting Masked multi threaded code path (using binning)\n", numThreads);
+	printf("----\n");
+	CullingThreadpool ctp(numThreads, 2, numThreads);
+	ctp.SetBuffer(moc);
+	ctp.WakeThreads();
+
+	unsigned int mocwidth, mocheight;
+	moc->GetResolution(mocwidth, mocheight);
+	// Rest Pass rate
+	nPassed = 0;
+	for (int i = 0; i < nTriangles; ++i)
+	{
+		RandomTriangle(verts);
+		bool pass = D3DValidateTriangleThreaded(verts, mocwidth, mocheight, &ctp);
+		if (pass)
+			nPassed++;
+		else
+			printf("Testing triangle %d... FAILED\n", i);
+
+		if (i % 100 == 0)
+			printf("Testing triangle %d\n", i);
+	}
+	printf("%d / %d triangles passed\n", nPassed, nTriangles);
+	ctp.SuspendThreads();
 }
