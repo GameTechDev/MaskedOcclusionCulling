@@ -303,6 +303,7 @@ int main(int argc, char* argv[])
 
 	MaskedOcclusionCulling *moc = MaskedOcclusionCulling::Create();
 
+
 #ifdef _WIN32
 	// Initialize directx
 	InitD3D(width, height);
@@ -356,6 +357,26 @@ int main(int argc, char* argv[])
 		printf("Tri: %3dx%3d - Time: %7.2f ms, MTris/s: %6.2f GPixels/s: %5.2f \n", size, size, t * 1000.0f, MTrisPerSecond, GPixelsPerSecond);
 	}
 #endif
+
+    printf( "Instruction set:" );
+    switch( moc->GetImplementation( ) )
+    {
+    case MaskedOcclusionCulling::SSE2:
+        printf( "SSE2\n" );
+        break;
+    case MaskedOcclusionCulling::SSE41:
+        printf( "SSE41\n" );
+        break;
+    case MaskedOcclusionCulling::AVX2:
+        printf( "AVX2\n" );
+        break;
+    case MaskedOcclusionCulling::AVX512:
+        printf( "AVX512\n\n" );
+        break;
+    default:
+        break;
+
+    };
 
 	printf("\n\nMasked single threaded\n");
 	printf("----\n");
