@@ -89,7 +89,7 @@ struct BenchStats
     int64_t RectTestCount;
 };
 
-BenchStats BenchmarkRecording( FrameRecord & record, MaskedOcclusionCulling & moc, const int loopCount, const bool includeTests = false )
+BenchStats BenchmarkRecording( FrameRecording & recording, MaskedOcclusionCulling & moc, const int loopCount, const bool includeTests = false )
 {
     assert( !includeTests ); // not yet implemented
 
@@ -97,14 +97,41 @@ BenchStats BenchmarkRecording( FrameRecord & record, MaskedOcclusionCulling & mo
 
 	auto before = std::chrono::high_resolution_clock::now();
 
+    moc.SetNearClipPlane( recording.mNearClipPlane );
+
     for( int loop = 0; loop < loopCount; loop++ )
     {
+        // enforce first clear
         moc.ClearBuffer( );
         stats.ClearCount++;
-        for( auto & triangleEntry : record.mTriangleEntries )
+
+        for( int i = 0; i < recording.mPlaybackOrder.size( ); i++ )
         {
-            moc.RenderTriangles( triangleEntry.mVertices.data( ), triangleEntry.mTriangles.data( ), (int)triangleEntry.mTriangles.size( ) / 3, ( triangleEntry.mHasModelToClipMatrix ) ? ( triangleEntry.mModelToClipMatrix ) : ( nullptr ), triangleEntry.mbfWinding, triangleEntry.mClipPlaneMask, triangleEntry.mVertexLayout );
-            stats.TriangleCount += triangleEntry.mTriangles.size( );
+            char elementType = recording.mPlaybackOrder[i].first;
+            int elementIndex = recording.mPlaybackOrder[i].second;
+            switch( elementType )
+            {
+                case( 0 ):  // RenderTriangles
+                {
+                    const FrameRecording::TrianglesEntry & triangleEntry = recording.mTriangleEntries[elementIndex];
+                    moc.RenderTriangles( triangleEntry.mVertices.data( ), triangleEntry.mTriangles.data( ), (int)triangleEntry.mTriangles.size( ) / 3, ( triangleEntry.mHasModelToClipMatrix ) ? ( triangleEntry.mModelToClipMatrix ) : ( nullptr ), triangleEntry.mbfWinding, triangleEntry.mClipPlaneMask, triangleEntry.mVertexLayout );
+                } break;
+                case( 1 ):  // TestRect
+                {
+                } break;
+                case( 2 ):  // TestTriangles
+                {
+                } break;
+                case( 3 ):  // ClearBuffer
+                {
+                    if( i != 0 )    // skip if first clear because we enforced that anyway
+                    {
+                        moc.ClearBuffer( );
+                        stats.ClearCount++;
+                    }
+                } break;
+                default: assert( false );
+            };
         }
     }
 	
@@ -115,7 +142,7 @@ BenchStats BenchmarkRecording( FrameRecord & record, MaskedOcclusionCulling & mo
     return stats;
 }
 
-BenchStats BenchmarkRecording( FrameRecord & record, CullingThreadpool & mocThreadpool, const int loopCount, const bool includeTests = false )
+BenchStats BenchmarkRecording( FrameRecording & recording, CullingThreadpool & mocThreadpool, const int loopCount, const bool includeTests = false )
 {
     assert( !includeTests ); // not yet implemented
 
@@ -123,27 +150,56 @@ BenchStats BenchmarkRecording( FrameRecord & record, CullingThreadpool & mocThre
 
     auto before = std::chrono::high_resolution_clock::now( );
 
+    mocThreadpool.SetNearClipPlane( recording.mNearClipPlane );
+
     for( int loop = 0; loop < loopCount; loop++ )
     {
+        // enforce first clear
         mocThreadpool.ClearBuffer( );
         stats.ClearCount++;
-        for( auto & triangleEntry : record.mTriangleEntries )
+
+        for( int i = 0; i < recording.mPlaybackOrder.size( ); i++ )
         {
-            mocThreadpool.SetMatrix( ( triangleEntry.mHasModelToClipMatrix ) ? ( triangleEntry.mModelToClipMatrix ) : ( nullptr ) );
-            mocThreadpool.SetVertexLayout( triangleEntry.mVertexLayout );
-            assert( !triangleEntry.mHasScissorRect );   // can't use scissor rect in multithreaded scenario because it's already used by the binning part of the algorithm
-            mocThreadpool.RenderTriangles( triangleEntry.mVertices.data( ), triangleEntry.mTriangles.data( ), (int)triangleEntry.mTriangles.size( ) / 3, triangleEntry.mbfWinding );
-            stats.TriangleCount += triangleEntry.mTriangles.size();
+            char elementType = recording.mPlaybackOrder[i].first;
+            int elementIndex = recording.mPlaybackOrder[i].second;
+            switch( elementType )
+            {
+                case( 0 ):  // RenderTriangles
+                {
+                    const FrameRecording::TrianglesEntry & triangleEntry = recording.mTriangleEntries[elementIndex];
+                    mocThreadpool.SetMatrix( ( triangleEntry.mHasModelToClipMatrix ) ? ( triangleEntry.mModelToClipMatrix ) : ( nullptr ) );
+                    mocThreadpool.SetVertexLayout( triangleEntry.mVertexLayout );
+                    assert( !triangleEntry.mHasScissorRect );   // can't use scissor rect in multithreaded scenario because it's already used by the binning part of the algorithm
+                    mocThreadpool.RenderTriangles( triangleEntry.mVertices.data( ), triangleEntry.mTriangles.data( ), (int)triangleEntry.mTriangles.size( ) / 3, triangleEntry.mbfWinding );
+                    stats.TriangleCount += triangleEntry.mTriangles.size( );
+                } break;
+                case( 1 ):  // TestRect
+                {
+                } break;
+                case( 2 ):  // TestTriangles
+                {
+                } break;
+                case( 3 ):  // ClearBuffer
+                {
+                    if( i != 0 )    // skip if first clear because we enforced that anyway
+                    {
+                        mocThreadpool.ClearBuffer( );
+                        stats.ClearCount++;
+                    }
+                } break;
+                default: assert( false ); break;
+            };
         }
+        mocThreadpool.Flush( );
     }
 
-	mocThreadpool.Flush();
 	auto after = std::chrono::high_resolution_clock::now();
 
 	stats.Time = std::chrono::duration<double>(after - before).count();
 
     return stats;
 }
+
 
 /*
 double BenchmarkTrianglesD3D(ID3D11Buffer *buf, int numTriangles, bool color)
@@ -223,7 +279,7 @@ int main(int argc, char* argv[])
 
     namespace fs = ::std::experimental::filesystem;
 
-    std::vector< std::pair< std::string, FrameRecord > > recordedFiles;
+    std::vector< std::pair< std::string, FrameRecording > > recordedFiles;
     
     printf( "\nLoading all '*.mocrec' files in the working directory...\n" );
     for( auto & p : fs::directory_iterator( "./" ) )
@@ -231,8 +287,8 @@ int main(int argc, char* argv[])
         if( fs::is_regular_file( p ) && p.path( ).extension( ) == ".mocrec" )
         {
             std::string fileName = p.path( ).string( );
-            FrameRecord record;
-            if( FrameRecord::Load( fileName.c_str(), record ) )
+            FrameRecording record;
+            if( FrameRecording::Load( fileName.c_str(), record ) )
             {
                 recordedFiles.push_back( std::make_pair( fileName, std::move(record) ) );
                 printf( " loaded dataset %d from '%s': OK\n", int(recordedFiles.size()-1), fileName.c_str( ) );
@@ -250,14 +306,40 @@ int main(int argc, char* argv[])
         auto & entry = recordedFiles[i];
         moc->ClearBuffer();
 
-        moc->RecorderStart( (entry.first+"-").c_str() );
-
-        for( auto & triangleEntry : entry.second.mTriangleEntries )
+        // Save previously loaded recording entries - useful to keep existing data alive when changing/expanding storage format
+#define RESAVE_ENTRIES 0
+#if RESAVE_ENTRIES != 0
+        moc->RecorderStart( (entry.first).c_str() );
+#endif
+        const FrameRecording & recording = entry.second;
+        moc->SetNearClipPlane(recording.mNearClipPlane);
+        for( int i = 0; i < recording.mPlaybackOrder.size(); i++ )
         {
-            moc->RenderTriangles( triangleEntry.mVertices.data(), triangleEntry.mTriangles.data(), (int)triangleEntry.mTriangles.size()/3, (triangleEntry.mHasModelToClipMatrix)?(triangleEntry.mModelToClipMatrix):(nullptr), triangleEntry.mbfWinding, triangleEntry.mClipPlaneMask, triangleEntry.mVertexLayout );
+            char elementType = recording.mPlaybackOrder[i].first;
+            int elementIndex = recording.mPlaybackOrder[i].second;
+            switch( elementType )
+            {
+                case( 0 ):  // RenderTriangles
+                {
+                    const FrameRecording::TrianglesEntry & triangleEntry = recording.mTriangleEntries[elementIndex]; 
+                    moc->RenderTriangles( triangleEntry.mVertices.data(), triangleEntry.mTriangles.data(), (int)triangleEntry.mTriangles.size()/3, (triangleEntry.mHasModelToClipMatrix)?(triangleEntry.mModelToClipMatrix):(nullptr), triangleEntry.mbfWinding, triangleEntry.mClipPlaneMask, triangleEntry.mVertexLayout );
+                } break;
+                case( 1 ):  // TestRect
+                {
+                } break;
+                case( 2 ):  // TestTriangles
+                {
+                } break;
+                case( 3 ):  // ClearBuffer
+                {
+                    moc->ClearBuffer( );
+                } break;
+                default: assert( false );
+            }
         }
-
+#if RESAVE_ENTRIES != 0
         moc->RecorderStop();
+#endif
 
         char fileName[1024]; sprintf_s( fileName, sizeof( fileName ), "%s.bmp", entry.first.c_str() );
 

@@ -230,7 +230,7 @@ public:
 			mMaskedHiZBuffer = (ZTile *)mAlignedAllocCallback(64, sizeof(ZTile) * mTilesWidth * mTilesHeight);
 	}
 
-	void GetResolution(unsigned int &width, unsigned int &height) override
+	void GetResolution(unsigned int &width, unsigned int &height) const override
 	{
 		width = mWidth;
 		height = mHeight;
@@ -249,7 +249,7 @@ public:
 		mCSFrustumPlanes[0] = _mm_setr_ps(0.0f, 0.0f, 1.0f, -nearDist);
 	}
 
-	float GetNearClipPlane() override
+	float GetNearClipPlane() const override
 	{
 		return mNearDist;
 	}
@@ -275,6 +275,13 @@ public:
 
 #if ENABLE_STATS != 0
 		memset(&mStats, 0, sizeof(OcclusionCullingStatistics));
+#endif
+
+#if ENABLE_RECORDER != 0
+        {
+            std::lock_guard<std::mutex> lock( mRecorderMutex );
+            if( mRecorder != nullptr ) mRecorder->RecordClearBuffer();
+        }
 #endif
 	}
 
