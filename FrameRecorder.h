@@ -50,18 +50,19 @@ class FrameRecorder
 
 protected:
 	friend class MaskedOcclusionCulling;
-	FrameRecorder( std::ofstream && outStream );
+	FrameRecorder( std::ofstream && outStream, const MaskedOcclusionCulling & moc );
 
 public:
 	~FrameRecorder( );
 
 public:
+    void RecordClearBuffer( );
 	void RecordRenderTriangles( MaskedOcclusionCulling::CullingResult cullingResult, const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix, MaskedOcclusionCulling::ClipPlanes clipPlaneMask, MaskedOcclusionCulling::BackfaceWinding bfWinding, const MaskedOcclusionCulling::VertexLayout &vtxLayout );
 	void RecordTestRect( MaskedOcclusionCulling::CullingResult cullingResult, float xmin, float ymin, float xmax, float ymax, float wmin );
 	void RecordTestTriangles( MaskedOcclusionCulling::CullingResult cullingResult, const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix, MaskedOcclusionCulling::ClipPlanes clipPlaneMask, MaskedOcclusionCulling::BackfaceWinding bfWinding, const MaskedOcclusionCulling::VertexLayout &vtxLayout );
 };
 
-struct FrameRecord
+struct FrameRecording
 {
 	struct TrianglesEntry
 	{
@@ -85,20 +86,27 @@ struct FrameRecord
 		float mWMin;
     };
 
-	// list of type&index pairs for playback ( type 0 is RenderTriangles, type 1 is TestRect, type 2 is TestTriangles )
+	// list of type&index pairs for playback ( type 0 is RenderTriangles, type 1 is TestRect, type 2 is TestTriangles, type 3 is ClearBuffer )
 	std::vector< std::pair< char, int > >	mPlaybackOrder;
 
 	std::vector< TrianglesEntry >			mTriangleEntries;
 	std::vector< RectEntry >				mRectEntries;
 
-    FrameRecord( ) = default;
-    FrameRecord( const FrameRecord & other ) = default;
+    float                                   mNearClipPlane;
+    unsigned int                            mResolutionWidth;
+    unsigned int                            mResolutionHeight;
 
-    FrameRecord( FrameRecord && other )
+    FrameRecording( ) = default;
+    FrameRecording( const FrameRecording & other ) = default;
+
+    FrameRecording( FrameRecording && other )
     {
         mPlaybackOrder = std::move( other.mPlaybackOrder );
         mTriangleEntries = std::move( other.mTriangleEntries );
         mRectEntries = std::move( other.mRectEntries );
+        mNearClipPlane = other.mNearClipPlane;
+        mResolutionWidth = other.mResolutionWidth;
+        mResolutionHeight = other.mResolutionHeight;
     }
 
 	void Reset( )
@@ -106,9 +114,12 @@ struct FrameRecord
 		mPlaybackOrder.clear();
 		mTriangleEntries.clear();
 		mRectEntries.clear();
+        mNearClipPlane = 0.0f;
+        mResolutionWidth = 0;
+        mResolutionHeight = 0;
 	}
 
-	static bool Load( const char * inputFilePath, FrameRecord & outRecording );
+	static bool Load( const char * inputFilePath, FrameRecording & outRecording );
 };
 
 #endif // #if ENABLE_RECORDER

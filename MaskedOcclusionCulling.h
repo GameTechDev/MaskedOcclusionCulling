@@ -167,7 +167,7 @@ public:
 	 * Used to specify custom vertex layout. Memory offsets to y and z coordinates are set through 
 	 * mOffsetY and mOffsetW, and vertex stride is given by mStride. It's possible to configure both 
 	 * AoS and SoA layouts. Note that large strides may cause more cache misses and decrease 
-	 * performance. It is advicable to store position data as compactly in memory as possible.
+	 * performance. It is advisable to store position data as compactly in memory as possible.
 	 */
 	struct VertexLayout
 	{
@@ -273,7 +273,7 @@ public:
 	* \param witdh Output: The width of the buffer in pixels
 	* \param height Output: The height of the buffer in pixels
 	*/
-	virtual void GetResolution(unsigned int &width, unsigned int &height) = 0;
+	virtual void GetResolution(unsigned int &width, unsigned int &height) const = 0;
 
 	/*!
 	 * \brief Returns the tile size for the current implementation.
@@ -299,7 +299,7 @@ public:
 	/*!
 	* \brief Gets the distance for the near clipping plane. 
 	*/
-	virtual float GetNearClipPlane() = 0;
+	virtual float GetNearClipPlane() const = 0;
 
 	/*!
 	 * \brief Clears the hierarchical depth buffer.
@@ -314,9 +314,9 @@ public:
 	 * offsets of 4 and 12 bytes, respectively.
 	 *
 	 * \param inVtx Pointer to an array of input vertices, should point to the x component
-	 *        of the first vertex. The input vertices are given as (x,y,w) cooordinates
+	 *        of the first vertex. The input vertices are given as (x,y,w) coordinates
 	 *        in clip space. The memory layout can be changed using vtxLayout.
-	 * \param inTris Pointer to an arrray of vertex indices. Each triangle is created 
+	 * \param inTris Pointer to an array of vertex indices. Each triangle is created 
 	 *        from three indices consecutively fetched from the array.
 	 * \param nTris The number of triangles to render (inTris must contain atleast 3*nTris
 	 *        entries)
@@ -329,10 +329,10 @@ public:
 	 * \param clipPlaneMask A mask indicating which clip planes should be considered by the
 	 *        triangle clipper. Can be used as an optimization if your application can 
 	 *        determine (for example during culling) that a group of triangles does not 
-	 *        intersect a certein frustum plane. However, setting an incorrect mask may 
+	 *        intersect a certain frustum plane. However, setting an incorrect mask may 
 	 *        cause out of bounds memory accesses.
 	 * \param vtxLayout A struct specifying the vertex layout (see struct for detailed 
-	 *        description). For best performance, it is advicable to store position data
+	 *        description). For best performance, it is advisable to store position data
 	 *        as compactly in memory as possible.
 	 * \return Will return VIEW_CULLED if all triangles are either outside the frustum or
 	 *         backface culled, returns VISIBLE otherwise.
@@ -368,9 +368,9 @@ public:
 	 * offsets of 4 and 12 bytes, respectively.
 	 *
 	 * \param inVtx Pointer to an array of input vertices, should point to the x component
-	 *        of the first vertex. The input vertices are given as (x,y,w) cooordinates
+	 *        of the first vertex. The input vertices are given as (x,y,w) coordinates
 	 *        in clip space. The memory layout can be changed using vtxLayout.
-	 * \param inTris Pointer to an arrray of triangle indices. Each triangle is created 
+	 * \param inTris Pointer to an array of triangle indices. Each triangle is created 
 	 *        from three indices consecutively fetched from the array.
 	 * \param nTris The number of triangles to render (inTris must contain atleast 3*nTris
 	 *        entries)
@@ -383,10 +383,10 @@ public:
 	 * \param clipPlaneMask A mask indicating which clip planes should be considered by the
 	 *        triangle clipper. Can be used as an optimization if your application can
 	 *        determine (for example during culling) that a group of triangles does not
-	 *        intersect a certein frustum plane. However, setting an incorrect mask may
+	 *        intersect a certain frustum plane. However, setting an incorrect mask may
 	 *        cause out of bounds memory accesses.
 	 * \param vtxLayout A struct specifying the vertex layout (see struct for detailed 
-	 *        description). For best performance, it is advicable to store position data
+	 *        description). For best performance, it is advisable to store position data
 	 *        as compactly in memory as possible.
 	 * \return The query will return VISIBLE if the triangle mesh may be visible, OCCLUDED
 	 *         if the mesh is occluded by a previously rendered object, or VIEW_CULLED if all
@@ -400,9 +400,9 @@ public:
 	 *        distribute work for threading (See the CullingThreadpool class for an example)
 	 *
 	 * \param inVtx Pointer to an array of input vertices, should point to the x component
-	 *        of the first vertex. The input vertices are given as (x,y,w) cooordinates
+	 *        of the first vertex. The input vertices are given as (x,y,w) coordinates
 	 *        in clip space. The memory layout can be changed using vtxLayout.
-	 * \param inTris Pointer to an arrray of vertex indices. Each triangle is created
+	 * \param inTris Pointer to an array of vertex indices. Each triangle is created
 	 *        from three indices consecutively fetched from the array.
 	 * \param nTris The number of triangles to render (inTris must contain atleast 3*nTris
 	 *        entries)
@@ -419,10 +419,10 @@ public:
 	 * \param clipPlaneMask A mask indicating which clip planes should be considered by the
 	 *        triangle clipper. Can be used as an optimization if your application can
 	 *        determine (for example during culling) that a group of triangles does not
-	 *        intersect a certein frustum plane. However, setting an incorrect mask may
+	 *        intersect a certain frustum plane. However, setting an incorrect mask may
 	 *        cause out of bounds memory accesses.
 	 * \param vtxLayout A struct specifying the vertex layout (see struct for detailed
-	 *        description). For best performance, it is advicable to store position data
+	 *        description). For best performance, it is advisable to store position data
 	 *        as compactly in memory as possible.
 	 * \param bfWinding Sets triangle winding order to consider backfacing, must be one one
 	 *        of (BACKFACE_NONE, BACKFACE_CW and BACKFACE_CCW). Back-facing triangles are culled
@@ -440,7 +440,7 @@ public:
 	 * \param triLists A triangle list, filled using the BinTriangles() function that is to
 	 *        be rendered.
 	 * \param scissor A scissor box limiting the rendering region to the bin. The size of each
-	 *        bin must be a multiple of 32x8 pixels due to implementation constrants. For a
+	 *        bin must be a multiple of 32x8 pixels due to implementation constraints. For a
 	 *        render target with (width, height) resolution and (nBinsW, nBinsH) bins, the
 	 *        size of a bin is:
 	 *          binWidth = (width / nBinsW) - (width / nBinsW) % 32;
@@ -481,12 +481,12 @@ public:
 	 *        multiplication (OGL) and row major for pre-multiplication (DX). This is 
 	 *        consistent with OpenGL / DirectX behavior.
 	 * \param inVtx Pointer to an array of input vertices. The input vertices are given as
-	 *        (x,y,z) cooordinates. The memory layout can be changed using vtxLayout.
+	 *        (x,y,z) coordinates. The memory layout can be changed using vtxLayout.
 	 * \param xfVtx Pointer to an array to store transformed vertices. The transformed
 	 *        vertices are always stored as array of structs (AoS) (x,y,z,w) packed in memory.
 	 * \param nVtx Number of vertices to transform.
 	 * \param vtxLayout A struct specifying the vertex layout (see struct for detailed 
-	 *        description). For best performance, it is advicable to store position data
+	 *        description). For best performance, it is advisable to store position data
 	 *        as compactly in memory as possible. Note that for this function, the
 	 *        w-component is assumed to be 1.0.
 	 */
@@ -494,9 +494,9 @@ public:
 
 #if ENABLE_RECORDER
     /*!
-	 * \brief Start recording subsequent rasterization and testing calls using the FrameRecorder 
-     *        (technically, only supports single frame recording for now). The function calls that
-     *        are recorded are:
+	 * \brief Start recording subsequent rasterization and testing calls using the FrameRecorder.
+     *        The function calls that are recorded are:
+     *         - ClearBuffer
 	 *         - RenderTriangles
      *         - TestTriangles
      *         - TestRect
@@ -514,14 +514,14 @@ public:
     void RecorderStop( ) const;
 
     /*!
-	 * \brief Record triangles. This will be called automatically from MaskedOcclusionCulling::RenderTriangles 
-     *  when recording is started, but not from BinTriangles/RenderTrilist, in which case it has to be called
-     *  manually.
+	 * \brief Manually record triangles. This is called automatically from MaskedOcclusionCulling::RenderTriangles 
+     *  if the recording is started, but not from BinTriangles/RenderTrilist (used in multithreaded codepath), in
+     *  which case it has to be called manually.
      *
      * \param inVtx Pointer to an array of input vertices, should point to the x component
-     *        of the first vertex. The input vertices are given as (x,y,w) cooordinates
+     *        of the first vertex. The input vertices are given as (x,y,w) coordinates
      *        in clip space. The memory layout can be changed using vtxLayout.
-     * \param inTris Pointer to an arrray of triangle indices. Each triangle is created
+     * \param inTris Pointer to an array of triangle indices. Each triangle is created
      *        from three indices consecutively fetched from the array.
      * \param nTris The number of triangles to render (inTris must contain atleast 3*nTris
      *        entries)
@@ -534,10 +534,10 @@ public:
      * \param clipPlaneMask A mask indicating which clip planes should be considered by the
      *        triangle clipper. Can be used as an optimization if your application can
      *        determine (for example during culling) that a group of triangles does not
-     *        intersect a certein frustum plane. However, setting an incorrect mask may
+     *        intersect a certain frustum plane. However, setting an incorrect mask may
      *        cause out of bounds memory accesses.
      * \param vtxLayout A struct specifying the vertex layout (see struct for detailed
-     *        description). For best performance, it is advicable to store position data
+     *        description). For best performance, it is advisable to store position data
      *        as compactly in memory as possible.
      * \param cullingResult cull result value expected to be returned by executing the
      *        RenderTriangles call with recorded parameters.

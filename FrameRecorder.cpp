@@ -34,7 +34,7 @@ bool MaskedOcclusionCulling::RecorderStart( const char * outputFilePath ) const
     std::ofstream outStream( outputFilePath, std::ios::out | std::ios::trunc | std::ios::binary );
     if( !outStream.is_open( ) )
         return false;
-    mRecorder = new FrameRecorder( std::move( outStream ) );
+    mRecorder = new FrameRecorder( std::move( outStream ), *this );
     return true;
 }
 
@@ -58,13 +58,23 @@ void MaskedOcclusionCulling::RecordRenderTriangles( const float *inVtx, const un
 // Masked occlusion culling recorder
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-FrameRecorder::FrameRecorder( std::ofstream && outStream ) : mOutStream( std::move( outStream ) )
+FrameRecorder::FrameRecorder( std::ofstream && outStream, const MaskedOcclusionCulling & moc ) : mOutStream( std::move( outStream ) )
 {
     assert( mOutStream.is_open( ) );
 
     // for file verification purposes
     unsigned int fileHeader = 0xA701B600;
     mOutStream.write( (const char *)&fileHeader, sizeof( fileHeader ) );
+
+    // save some of the MOC states (we can override them for the playback)
+    float nearClipPlane = moc.GetNearClipPlane();
+    unsigned int width;
+    unsigned int height;
+    moc.GetResolution( width, height );
+
+    mOutStream.write( (const char *)&nearClipPlane, sizeof( nearClipPlane ) );
+    mOutStream.write( (const char *)&width, sizeof( width ) );
+    mOutStream.write( (const char *)&height, sizeof( height ) );
 }
 
 FrameRecorder::~FrameRecorder( )
@@ -134,7 +144,7 @@ static void WriteTriangleRecording( std::ofstream & outStream, MaskedOcclusionCu
     outStream.write( (const char *)&vtxLayout, sizeof( vtxLayout ) );
 }
 
-static bool ReadTriangleRecording( FrameRecord::TrianglesEntry & outEntry, std::ifstream & inStream )
+static bool ReadTriangleRecording( FrameRecording::TrianglesEntry & outEntry, std::ifstream & inStream )
 {
     // read culling result
     inStream.read( (char*)&outEntry.mCullingResult, sizeof( outEntry.mCullingResult ) );
@@ -245,6 +255,14 @@ static bool ReadTriangleRecording( FrameRecord::TrianglesEntry & outEntry, std::
     return true;
 }
 
+void FrameRecorder::RecordClearBuffer( )
+{
+    assert( mOutStream.is_open( ) );
+
+    char header = 3;
+    mOutStream.write( &header, 1 );
+}
+
 void FrameRecorder::RecordRenderTriangles( MaskedOcclusionCulling::CullingResult cullingResult, const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix, MaskedOcclusionCulling::ClipPlanes clipPlaneMask, MaskedOcclusionCulling::BackfaceWinding bfWinding, const MaskedOcclusionCulling::VertexLayout & vtxLayout )
 {
     assert( mOutStream.is_open( ) );
@@ -283,7 +301,7 @@ void FrameRecorder::RecordTestTriangles( MaskedOcclusionCulling::CullingResult c
 // Masked occlusion culling recording
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-bool FrameRecord::Load( const char * inputFilePath, FrameRecord & outRecording )
+bool FrameRecording::Load( const char * inputFilePath, FrameRecording & outRecording )
 {
     outRecording.Reset();
 
@@ -301,6 +319,10 @@ bool FrameRecord::Load( const char * inputFilePath, FrameRecord & outRecording )
         return false;
     }
 
+    inStream.read( (char *)&outRecording.mNearClipPlane, sizeof( outRecording.mNearClipPlane ) );
+    inStream.read( (char *)&outRecording.mResolutionWidth, sizeof( outRecording.mResolutionWidth ) );
+    inStream.read( (char *)&outRecording.mResolutionHeight, sizeof( outRecording.mResolutionHeight ) );
+
     bool continueLoading = true;
     while( continueLoading )
     {
@@ -314,8 +336,8 @@ bool FrameRecord::Load( const char * inputFilePath, FrameRecord & outRecording )
         }
         switch( chunkHeader )
         {
-            case( 0 ): 
-            case( 2 ):
+            case( 0 ):      // RenderTriangles
+            case( 2 ):      // TestTriangles
             {
                 outRecording.mTriangleEntries.push_back( TrianglesEntry() );
                 int triangleEntryIndex = (int)outRecording.mTriangleEntries.size( )-1;
@@ -327,7 +349,7 @@ bool FrameRecord::Load( const char * inputFilePath, FrameRecord & outRecording )
                 }
                 outRecording.mPlaybackOrder.push_back( std::make_pair( chunkHeader, triangleEntryIndex )  );
             } break;
-            case( 1 ):
+            case( 1 ):      // TestRect
             {
                 outRecording.mRectEntries.push_back( RectEntry( ) );
                 int rectEntryIndex = (int)outRecording.mRectEntries.size( )-1;
@@ -342,11 +364,15 @@ bool FrameRecord::Load( const char * inputFilePath, FrameRecord & outRecording )
                 }
                 outRecording.mPlaybackOrder.push_back( std::make_pair( chunkHeader, rectEntryIndex ) );
             } break;
-            case( 0x7F ):
-                // 's all good man
+            case( 3 ):      // ClearBuffer
+            {
+                outRecording.mPlaybackOrder.push_back( std::make_pair( 3, -1 ) );
+            } break;
+            case( 0x7F ):   // eOF
+            {
                 continueLoading = false;
                 return true;
-                break;
+            } break;
             default:
             {
                 assert( false );
