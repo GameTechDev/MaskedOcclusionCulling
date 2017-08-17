@@ -88,6 +88,24 @@
 
 #endif
 
+#ifndef ENABLE_RECORDER
+/*!
+ * Define ENABLE_RECORDER to 1 to enable frame recorder (see FrameRecorder.h/cpp for details)
+ */
+#define ENABLE_RECORDER		0
+
+#endif
+
+
+#if ENABLE_RECORDER
+
+#include <mutex>
+
+class FrameRecorder;
+
+#endif // #if ENABLE_RECORDER
+
+
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Masked occlusion culling class
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -474,11 +492,72 @@ public:
 	 */
 	static void TransformVertices(const float *mtx, const float *inVtx, float *xfVtx, unsigned int nVtx, const VertexLayout &vtxLayout = VertexLayout(12, 4, 8));
 
+#if ENABLE_RECORDER
+    /*!
+	 * \brief Start recording subsequent rasterization and testing calls using the FrameRecorder 
+     *        (technically, only supports single frame recording for now). The function calls that
+     *        are recorded are:
+	 *         - RenderTriangles
+     *         - TestTriangles
+     *         - TestRect
+     *        All inputs and outputs are recorded, which can be used for correctness validation
+     *        and performance testing.
+     *
+	 * \param outputFilePath Pointer to name of the output file. 
+	 * \return 'true' if recording was started successfully, 'false' otherwise (file access error).
+	 */
+    bool RecorderStart( const char * outputFilePath ) const;
+
+    /*!
+	 * \brief Stop recording, flush output and release used memory.
+	 */
+    void RecorderStop( ) const;
+
+    /*!
+	 * \brief Record triangles. This will be called automatically from MaskedOcclusionCulling::RenderTriangles 
+     *  when recording is started, but not from BinTriangles/RenderTrilist, in which case it has to be called
+     *  manually.
+     *
+     * \param inVtx Pointer to an array of input vertices, should point to the x component
+     *        of the first vertex. The input vertices are given as (x,y,w) cooordinates
+     *        in clip space. The memory layout can be changed using vtxLayout.
+     * \param inTris Pointer to an arrray of triangle indices. Each triangle is created
+     *        from three indices consecutively fetched from the array.
+     * \param nTris The number of triangles to render (inTris must contain atleast 3*nTris
+     *        entries)
+     * \param modelToClipMatrix all vertices will be transformed by this matrix before
+     *        performing projection. If nullptr is passed the transform step will be skipped
+     * \param bfWinding Sets triangle winding order to consider backfacing, must be one one
+     *        of (BACKFACE_NONE, BACKFACE_CW and BACKFACE_CCW). Back-facing triangles are culled
+     *        and will not be occlusion tested. You may use BACKFACE_NONE to disable culling
+     *        for double sided geometry
+     * \param clipPlaneMask A mask indicating which clip planes should be considered by the
+     *        triangle clipper. Can be used as an optimization if your application can
+     *        determine (for example during culling) that a group of triangles does not
+     *        intersect a certein frustum plane. However, setting an incorrect mask may
+     *        cause out of bounds memory accesses.
+     * \param vtxLayout A struct specifying the vertex layout (see struct for detailed
+     *        description). For best performance, it is advicable to store position data
+     *        as compactly in memory as possible.
+     * \param cullingResult cull result value expected to be returned by executing the
+     *        RenderTriangles call with recorded parameters.
+	 */
+    // 
+    // merge the binned data back into original layout; in this case, call it manually from your Threadpool implementation (already added to CullingThreadpool).
+    // If recording is not enabled, calling this function will do nothing.
+    void RecordRenderTriangles( const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix = nullptr, ClipPlanes clipPlaneMask = CLIP_PLANE_ALL, BackfaceWinding bfWinding = BACKFACE_CW, const VertexLayout &vtxLayout = VertexLayout( 16, 4, 12 ), CullingResult cullingResult = (CullingResult)-1 );
+#endif // #if ENABLE_RECORDER
+
 protected:
 	pfnAlignedAlloc mAlignedAllocCallback;
 	pfnAlignedFree  mAlignedFreeCallback;
 
 	mutable OcclusionCullingStatistics mStats;
+
+#if ENABLE_RECORDER
+    mutable FrameRecorder * mRecorder;
+    mutable std::mutex mRecorderMutex;
+#endif // #if ENABLE_RECORDER
 
 	virtual ~MaskedOcclusionCulling() {}
 };
