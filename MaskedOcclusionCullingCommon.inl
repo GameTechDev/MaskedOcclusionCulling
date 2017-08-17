@@ -1874,7 +1874,11 @@ public:
 				int pixelLayer = (simd_i32(mMaskedHiZBuffer[tileIdx].mMask)[subTileIdx] >> bitIdx) & 1;
 				float pixelDepth = simd_f32(mMaskedHiZBuffer[tileIdx].mZMin[pixelLayer])[subTileIdx];
 
-				depthData[y * mWidth + x] = pixelDepth;
+#if USE_D3D != 0
+                depthData[( mHeight - y - 1 ) * mWidth + x] = pixelDepth;
+#else
+                depthData[y * mWidth + x] = pixelDepth;
+#endif
 			}
 		}
 	}
