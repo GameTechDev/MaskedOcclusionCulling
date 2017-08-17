@@ -19,6 +19,10 @@
 #include "MaskedOcclusionCulling.h"
 #include "CompilerSpecific.inl"
 
+#if ENABLE_RECORDER
+#include "FrameRecorder.h"
+#endif
+
 #if defined(__MICROSOFT_COMPILER) && _MSC_VER < 1900
 	// If you remove/comment this error, the code will compile & use the SSE41 version instead. 
 	#error Older versions than visual studio 2015 not supported due to compiler bug(s)

@@ -151,6 +151,9 @@ public:
 		mMaskedHiZBuffer = nullptr;
 		mAlignedAllocCallback = alignedAlloc;
 		mAlignedFreeCallback = alignedFree;
+#if ENABLE_RECORDER
+        mRecorder = nullptr;
+#endif
 
 		SetNearClipPlane(0.0f);
 		mCSFrustumPlanes[0] = _mm_setr_ps(0.0f, 0.0f, 1.0f, 0.0f);
@@ -169,6 +172,10 @@ public:
 		if (mMaskedHiZBuffer != nullptr)
 			mAlignedFreeCallback(mMaskedHiZBuffer);
 		mMaskedHiZBuffer = nullptr;
+
+#if ENABLE_RECORDER
+        assert( mRecorder == nullptr ); // forgot to call StopRecording()?
+#endif
 	}
 
 	void SetResolution(unsigned int width, unsigned int height) override
@@ -1487,10 +1494,17 @@ public:
 
 	CullingResult RenderTriangles(const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix, BackfaceWinding bfWinding, ClipPlanes clipPlaneMask, const VertexLayout &vtxLayout) override
 	{
-		if (vtxLayout.mStride == 16 && vtxLayout.mOffsetY == 4 && vtxLayout.mOffsetW == 12)
-			return (CullingResult)RenderTriangles<0, 1>(inVtx, inTris, nTris, modelToClipMatrix, bfWinding, clipPlaneMask, vtxLayout);
+        CullingResult retVal;
 
-		return (CullingResult)RenderTriangles<0, 0>(inVtx, inTris, nTris, modelToClipMatrix, bfWinding, clipPlaneMask, vtxLayout);
+        if (vtxLayout.mStride == 16 && vtxLayout.mOffsetY == 4 && vtxLayout.mOffsetW == 12)
+			retVal = (CullingResult)RenderTriangles<0, 1>(inVtx, inTris, nTris, modelToClipMatrix, bfWinding, clipPlaneMask, vtxLayout);
+        else
+            retVal = (CullingResult)RenderTriangles<0, 0>(inVtx, inTris, nTris, modelToClipMatrix, bfWinding, clipPlaneMask, vtxLayout);
+
+#if ENABLE_RECORDER
+        RecordRenderTriangles( inVtx, inTris, nTris, modelToClipMatrix, clipPlaneMask, bfWinding, vtxLayout, retVal );
+#endif
+		return retVal;
 	}
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1499,13 +1513,24 @@ public:
 
 	CullingResult TestTriangles(const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix, BackfaceWinding bfWinding, ClipPlanes clipPlaneMask, const VertexLayout &vtxLayout) override
 	{
-		if (vtxLayout.mStride == 16 && vtxLayout.mOffsetY == 4 && vtxLayout.mOffsetW == 12)
-			return (CullingResult)RenderTriangles<1, 1>(inVtx, inTris, nTris, modelToClipMatrix, bfWinding, clipPlaneMask, vtxLayout);
+        CullingResult retVal;
 
-		return (CullingResult)RenderTriangles<1, 0>(inVtx, inTris, nTris, modelToClipMatrix, bfWinding, clipPlaneMask, vtxLayout);
+        if (vtxLayout.mStride == 16 && vtxLayout.mOffsetY == 4 && vtxLayout.mOffsetW == 12)
+			retVal = (CullingResult)RenderTriangles<1, 1>(inVtx, inTris, nTris, modelToClipMatrix, bfWinding, clipPlaneMask, vtxLayout);
+        else
+		    retVal = (CullingResult)RenderTriangles<1, 0>(inVtx, inTris, nTris, modelToClipMatrix, bfWinding, clipPlaneMask, vtxLayout);
+
+#if ENABLE_RECORDER
+        {
+            std::lock_guard<std::mutex> lock( mRecorderMutex );
+            if( mRecorder != nullptr ) mRecorder->RecordTestTriangles( retVal, inVtx, inTris, nTris, modelToClipMatrix, clipPlaneMask, bfWinding, vtxLayout );
+        }
+#endif
+        return retVal;
 	}
-
-	CullingResult TestRect(float xmin, float ymin, float xmax, float ymax, float wmin) const override
+    
+    private:
+	CullingResult TestRectInternal(float xmin, float ymin, float xmax, float ymax, float wmin) const
 	{
 		STATS_ADD(mStats.mOccludees.mNumProcessedRectangles, 1);
 		assert(mMaskedHiZBuffer != nullptr);
@@ -1602,6 +1627,21 @@ public:
 
 		return CullingResult::OCCLUDED;
 	}
+
+    public:
+    CullingResult TestRect( float xmin, float ymin, float xmax, float ymax, float wmin ) const override
+    {
+        CullingResult retVal = TestRectInternal( xmin, ymin, xmax, ymax, wmin );
+
+#if ENABLE_RECORDER
+        {
+            std::lock_guard<std::mutex> lock( mRecorderMutex );
+            if( mRecorder != nullptr ) mRecorder->RecordTestRect( retVal, xmin, ymin, xmax, ymax, wmin );
+        }
+#endif
+        return retVal;
+    }
+
 
 	template<bool FAST_GATHER>
 	FORCE_INLINE void BinTriangles(const float *inVtx, const unsigned int *inTris, int nTris, TriList *triLists, unsigned int nBinsW, unsigned int nBinsH, const float *modelToClipMatrix, BackfaceWinding bfWinding, ClipPlanes clipPlaneMask, const VertexLayout &vtxLayout)

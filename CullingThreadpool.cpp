@@ -432,7 +432,11 @@ void CullingThreadpool::ClearBuffer()
 
 void CullingThreadpool::RenderTriangles(const float *inVtx, const unsigned int *inTris, int nTris, BackfaceWinding bfWinding, ClipPlanes clipPlaneMask)
 {
-	for (int i = 0; i < nTris; i += TRIS_PER_JOB)
+#if ENABLE_RECORDER
+    mMOC->RecordRenderTriangles( inVtx, inTris, nTris, mCurrentMatrix, clipPlaneMask, bfWinding, *mVertexLayouts.GetData( ) );
+#endif
+
+    for (int i = 0; i < nTris; i += TRIS_PER_JOB)
 	{
 		// Yield if work queue is full 
 		while (!mRenderQueue->CanWrite())

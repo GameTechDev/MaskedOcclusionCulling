@@ -20,6 +20,10 @@
 #include "MaskedOcclusionCulling.h"
 #include "CompilerSpecific.inl"
 
+#if ENABLE_RECORDER
+#include "FrameRecorder.h"
+#endif
+
 #if defined(__AVX__) || defined(__AVX2__)
 	// For performance reasons, the MaskedOcclusionCullingAVX2/512.cpp files should be compiled with VEX encoding for SSE instructions (to avoid 
 	// AVX-SSE transition penalties, see https://software.intel.com/en-us/articles/avoiding-avx-sse-transition-penalties). However, this file
