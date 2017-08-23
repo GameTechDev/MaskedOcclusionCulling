@@ -1536,8 +1536,7 @@ public:
         return retVal;
 	}
     
-    private:
-	CullingResult TestRectInternal(float xmin, float ymin, float xmax, float ymax, float wmin) const
+    CullingResult TestRect( float xmin, float ymin, float xmax, float ymax, float wmin ) const override
 	{
 		STATS_ADD(mStats.mOccludees.mNumProcessedRectangles, 1);
 		assert(mMaskedHiZBuffer != nullptr);
@@ -1568,7 +1567,15 @@ public:
 		int tileRowIdxEnd = (simd_i32(tileBBoxi)[3] >> TILE_HEIGHT_SHIFT)*mTilesWidth;
 
 		if (simd_i32(tileBBoxi)[0] == simd_i32(tileBBoxi)[1] || simd_i32(tileBBoxi)[2] == simd_i32(tileBBoxi)[3])
-			return CullingResult::VIEW_CULLED;
+        {
+#if ENABLE_RECORDER
+            {
+                std::lock_guard<std::mutex> lock( mRecorderMutex );
+                if( mRecorder != nullptr ) mRecorder->RecordTestRect( CullingResult::VIEW_CULLED, xmin, ymin, xmax, ymax, wmin );
+            }
+#endif
+            return CullingResult::VIEW_CULLED;
+        }
 
 		///////////////////////////////////////////////////////////////////////////////
 		// Pad bounding box to (8x4) subtiles. Skip SIMD lanes outside the subtile BB
@@ -1619,7 +1626,15 @@ public:
 
 				// If not all tiles failed the conservative z test we can immediately terminate the test
 				if (!_mmw_testz_epi32(zPass, zPass))
-					return CullingResult::VISIBLE;
+                {
+#if ENABLE_RECORDER
+                    {
+                        std::lock_guard<std::mutex> lock( mRecorderMutex );
+                        if( mRecorder != nullptr ) mRecorder->RecordTestRect( CullingResult::VISIBLE, xmin, ymin, xmax, ymax, wmin );
+                    }
+#endif
+                    return CullingResult::VISIBLE;
+                }
 
 				if (++tx >= txMax)
 					break;
@@ -1631,24 +1646,14 @@ public:
 				break;
 			pixelY = _mmw_add_epi32(pixelY, _mmw_set1_epi32(TILE_HEIGHT));
 		}
-
-		return CullingResult::OCCLUDED;
-	}
-
-    public:
-    CullingResult TestRect( float xmin, float ymin, float xmax, float ymax, float wmin ) const override
-    {
-        CullingResult retVal = TestRectInternal( xmin, ymin, xmax, ymax, wmin );
-
 #if ENABLE_RECORDER
         {
             std::lock_guard<std::mutex> lock( mRecorderMutex );
-            if( mRecorder != nullptr ) mRecorder->RecordTestRect( retVal, xmin, ymin, xmax, ymax, wmin );
+            if( mRecorder != nullptr ) mRecorder->RecordTestRect( CullingResult::OCCLUDED, xmin, ymin, xmax, ymax, wmin );
         }
 #endif
-        return retVal;
-    }
-
+		return CullingResult::OCCLUDED;
+	}
 
 	template<bool FAST_GATHER>
 	FORCE_INLINE void BinTriangles(const float *inVtx, const unsigned int *inTris, int nTris, TriList *triLists, unsigned int nBinsW, unsigned int nBinsH, const float *modelToClipMatrix, BackfaceWinding bfWinding, ClipPlanes clipPlaneMask, const VertexLayout &vtxLayout)
