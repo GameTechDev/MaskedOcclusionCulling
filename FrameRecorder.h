@@ -38,22 +38,46 @@
 
 #include "MaskedOcclusionCulling.h"
 
+#ifndef MOC_RECORDER_USE_STDIO_FILE
+/*!
+ * Whether to use FILE or std::ofstream/istream for file access (to avoid compatibility issues in some environments)
+ */
+#define MOC_RECORDER_USE_STDIO_FILE          0
+#endif
+
 #if ENABLE_RECORDER
 
+#if MOC_RECORDER_USE_STDIO_FILE
+#include <stdio.h>
+#else
 #include <fstream>
+#endif
+
 #include <mutex>
 #include <vector>
 
 class FrameRecorder
 {
-	std::ofstream       mOutStream;
+#if MOC_RECORDER_USE_STDIO_FILE
+    FILE *              mOutFile;
+#else
+    std::ofstream       mOutStream;
+#endif
 
 protected:
 	friend class MaskedOcclusionCulling;
+#if MOC_RECORDER_USE_STDIO_FILE
+    FrameRecorder( FILE *& outFile, const MaskedOcclusionCulling & moc );
+#else
 	FrameRecorder( std::ofstream && outStream, const MaskedOcclusionCulling & moc );
+#endif
 
 public:
-	~FrameRecorder( );
+    ~FrameRecorder( );
+
+protected:
+    void Write( const void * buffer, size_t size );
+    void WriteTriangleRecording( MaskedOcclusionCulling::CullingResult cullingResult, const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix, MaskedOcclusionCulling::ClipPlanes clipPlaneMask, MaskedOcclusionCulling::BackfaceWinding bfWinding, const MaskedOcclusionCulling::VertexLayout & vtxLayout );
 
 public:
     void RecordClearBuffer( );

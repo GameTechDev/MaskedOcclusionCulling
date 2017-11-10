@@ -31,10 +31,17 @@ bool MaskedOcclusionCulling::RecorderStart( const char * outputFilePath ) const
     if( mRecorder != nullptr )
         return false;
 
+#if MOC_RECORDER_USE_STDIO_FILE
+    FILE * f;
+    if( fopen_s( &f, outputFilePath, "wb" ) != 0 )
+        return false;
+    mRecorder = new FrameRecorder( f, *this );
+#else
     std::ofstream outStream( outputFilePath, std::ios::out | std::ios::trunc | std::ios::binary );
     if( !outStream.is_open( ) )
         return false;
     mRecorder = new FrameRecorder( std::move( outStream ), *this );
+#endif
     return true;
 }
 
@@ -58,13 +65,23 @@ void MaskedOcclusionCulling::RecordRenderTriangles( const float *inVtx, const un
 // Masked occlusion culling recorder
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#if MOC_RECORDER_USE_STDIO_FILE
+FrameRecorder::FrameRecorder( FILE *& outFile, const MaskedOcclusionCulling & moc )
+#else
 FrameRecorder::FrameRecorder( std::ofstream && outStream, const MaskedOcclusionCulling & moc ) : mOutStream( std::move( outStream ) )
+#endif
 {
+#if MOC_RECORDER_USE_STDIO_FILE
+    mOutFile = outFile;
+    outFile = 0;
+    assert( mOutFile != 0 );
+#else
     assert( mOutStream.is_open( ) );
+#endif
 
     // for file verification purposes
     unsigned int fileHeader = 0xA701B600;
-    mOutStream.write( (const char *)&fileHeader, sizeof( fileHeader ) );
+    Write( &fileHeader, sizeof( fileHeader ) );
 
     // save some of the MOC states (we can override them for the playback)
     float nearClipPlane = moc.GetNearClipPlane();
@@ -72,24 +89,37 @@ FrameRecorder::FrameRecorder( std::ofstream && outStream, const MaskedOcclusionC
     unsigned int height;
     moc.GetResolution( width, height );
 
-    mOutStream.write( (const char *)&nearClipPlane, sizeof( nearClipPlane ) );
-    mOutStream.write( (const char *)&width, sizeof( width ) );
-    mOutStream.write( (const char *)&height, sizeof( height ) );
+    Write( &nearClipPlane, sizeof( nearClipPlane ) );
+    Write( &width, sizeof( width ) );
+    Write( &height, sizeof( height ) );
 }
 
 FrameRecorder::~FrameRecorder( )
 {
     // end of file marker
     char footer = 0x7F;
-    mOutStream.write( &footer, 1 );
+    Write( &footer, 1 );
 
+#if MOC_RECORDER_USE_STDIO_FILE
+    fclose( mOutFile );
+#else
     mOutStream.close( );
+#endif
 }
 
-static void WriteTriangleRecording( std::ofstream & outStream, MaskedOcclusionCulling::CullingResult cullingResult, const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix, MaskedOcclusionCulling::ClipPlanes clipPlaneMask, MaskedOcclusionCulling::BackfaceWinding bfWinding, const MaskedOcclusionCulling::VertexLayout & vtxLayout )
+void FrameRecorder::Write( const void * buffer, size_t size )
+{
+#if MOC_RECORDER_USE_STDIO_FILE
+    fwrite( buffer, 1, size, mOutFile );
+#else
+    mOutStream.write( (const char *)buffer, size );
+#endif
+}
+
+void FrameRecorder::WriteTriangleRecording( MaskedOcclusionCulling::CullingResult cullingResult, const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix, MaskedOcclusionCulling::ClipPlanes clipPlaneMask, MaskedOcclusionCulling::BackfaceWinding bfWinding, const MaskedOcclusionCulling::VertexLayout & vtxLayout )
 {
     // write culling result
-    outStream.write( (const char*)&cullingResult, sizeof( cullingResult ) );
+    Write( &cullingResult, sizeof( cullingResult ) );
 
     unsigned int minVIndex = 0xffffffff;
     unsigned int maxVIndex = 0;
@@ -104,7 +134,7 @@ static void WriteTriangleRecording( std::ofstream & outStream, MaskedOcclusionCu
 
     // write actually used vertex count
     int vertexCount = ( maxVIndex < minVIndex ) ? ( 0 ) : ( maxVIndex - minVIndex + 1 );
-    outStream.write( (const char*)&vertexCount, sizeof( vertexCount ) );
+    Write( &vertexCount, sizeof( vertexCount ) );
 
     // nothing more to write? early exit
     if( vertexCount == 0 )
@@ -112,13 +142,13 @@ static void WriteTriangleRecording( std::ofstream & outStream, MaskedOcclusionCu
 
     // write vertex size
     int vertexSize = vtxLayout.mStride;
-    outStream.write( (const char*)&vertexSize, sizeof( vertexSize ) );
+    Write( &vertexSize, sizeof( vertexSize ) );
 
     // write vertices
-    outStream.write( ( (const char*)inVtx ) + minVIndex*vertexSize, vertexSize * ( vertexCount ) );
+    Write( ( (const char*)inVtx ) + minVIndex*vertexSize, vertexSize * ( vertexCount ) );
 
     // write triangle count
-    outStream.write( (const char *)&nTris, sizeof( nTris ) );
+    Write( &nTris, sizeof( nTris ) );
 
     // write indices with adjusted offset
     for( int i = 0; i < nTris; i++ )
@@ -127,28 +157,57 @@ static void WriteTriangleRecording( std::ofstream & outStream, MaskedOcclusionCu
         triangleIndices[0] = inTris[i * 3 + 0] - minVIndex;
         triangleIndices[1] = inTris[i * 3 + 1] - minVIndex;
         triangleIndices[2] = inTris[i * 3 + 2] - minVIndex;
-        outStream.write( (const char *)triangleIndices, sizeof( triangleIndices ) );
+        Write( triangleIndices, sizeof( triangleIndices ) );
     }
 
     // write model to clip matrix (if any)
     char hasMatrix = ( modelToClipMatrix != nullptr ) ? ( 1 ) : ( 0 );
-    outStream.write( (const char *)&hasMatrix, sizeof( hasMatrix ) );
+    Write( &hasMatrix, sizeof( hasMatrix ) );
     if( hasMatrix )
-        outStream.write( (const char *)modelToClipMatrix, 16 * sizeof( float ) );
+        Write( modelToClipMatrix, 16 * sizeof( float ) );
 
-    outStream.write( (const char *)&clipPlaneMask, sizeof( clipPlaneMask ) );
+    Write( &clipPlaneMask, sizeof( clipPlaneMask ) );
 
-    outStream.write( (const char*)&bfWinding, sizeof( bfWinding ) );
+    Write( &bfWinding, sizeof( bfWinding ) );
 
     // write vertex layout
-    outStream.write( (const char *)&vtxLayout, sizeof( vtxLayout ) );
+    Write( &vtxLayout, sizeof( vtxLayout ) );
 }
 
-static bool ReadTriangleRecording( FrameRecording::TrianglesEntry & outEntry, std::ifstream & inStream )
+namespace 
+{ 
+    // Warning, takes ownership of the underlying stream and closes it at the end
+    struct InStreamWrapper
+    {
+#if MOC_RECORDER_USE_STDIO_FILE
+        FILE *              mInFile;
+#else
+        std::ifstream       mInStream;
+#endif
+
+#if MOC_RECORDER_USE_STDIO_FILE
+        InStreamWrapper( FILE *& inFile )           { mInFile = inFile; assert( mInFile != 0 ); inFile = 0; }
+        ~InStreamWrapper( )                         { fclose( mInFile ); }
+#else
+        InStreamWrapper( std::ifstream && inStream ) : mInStream( std::move( inStream ) ) { assert( mInStream.is_open() ); }
+#endif
+
+        size_t Read( void * buffer, size_t size )
+        {
+#if MOC_RECORDER_USE_STDIO_FILE
+            return fread( buffer, 1, size, mInFile );
+#else
+            mInStream.read( (char*)buffer, size );
+            return mInStream.gcount( );
+#endif
+        }
+    };
+}
+
+static bool ReadTriangleRecording( FrameRecording::TrianglesEntry & outEntry, InStreamWrapper & inStream )
 {
     // read culling result
-    inStream.read( (char*)&outEntry.mCullingResult, sizeof( outEntry.mCullingResult ) );
-    if( inStream.gcount( ) != sizeof( outEntry.mCullingResult ) )
+    if( inStream.Read( (char*)&outEntry.mCullingResult, sizeof( outEntry.mCullingResult ) ) != sizeof( outEntry.mCullingResult ) )
     {
         assert( false );
         return false;
@@ -156,8 +215,7 @@ static bool ReadTriangleRecording( FrameRecording::TrianglesEntry & outEntry, st
 
     // read used vertex count
     int vertexCount = 0;
-    inStream.read( (char*)&vertexCount, sizeof( vertexCount ) );
-    if( inStream.gcount( ) != sizeof( vertexCount ) )
+    if( inStream.Read( (char*)&vertexCount, sizeof( vertexCount ) ) != sizeof( vertexCount ) )
     {
         assert( false );
         return false;
@@ -174,8 +232,7 @@ static bool ReadTriangleRecording( FrameRecording::TrianglesEntry & outEntry, st
 
     // read vertex size
     int vertexSize = 0;
-    inStream.read( (char*)&vertexSize, sizeof( vertexSize ) );
-    if( inStream.gcount( ) != sizeof( vertexSize ) )
+    if( inStream.Read( (char*)&vertexSize, sizeof( vertexSize ) ) != sizeof( vertexSize ) )
     {
         assert( false );
         return false;
@@ -183,8 +240,7 @@ static bool ReadTriangleRecording( FrameRecording::TrianglesEntry & outEntry, st
 
     // read vertices
     outEntry.mVertices.resize( vertexSize / 4 * vertexCount );  // pre-allocate data
-    inStream.read( (char*) outEntry.mVertices.data(), vertexSize * vertexCount );
-    if( inStream.gcount( ) != (vertexSize * vertexCount) )
+    if( inStream.Read( (char*) outEntry.mVertices.data(), vertexSize * vertexCount ) != (vertexSize * vertexCount) )
     {
         assert( false );
         return false;
@@ -192,16 +248,14 @@ static bool ReadTriangleRecording( FrameRecording::TrianglesEntry & outEntry, st
 
     // read triangle count
     int triangleCount = 0;
-    inStream.read( (char*)&triangleCount, sizeof( triangleCount ) );
-    if( inStream.gcount( ) != sizeof( triangleCount ) )
+    if( inStream.Read( (char*)&triangleCount, sizeof( triangleCount ) ) != sizeof( triangleCount ) )
     {
         assert( false );
         return false;
     }
 
     outEntry.mTriangles.resize( triangleCount * 3 );
-    inStream.read( (char*)outEntry.mTriangles.data( ), triangleCount * 3 * 4 );
-    if( inStream.gcount( ) != ( triangleCount * 3 * 4 ) )
+    if( inStream.Read( (char*)outEntry.mTriangles.data( ), triangleCount * 3 * 4 ) != ( triangleCount * 3 * 4 ) )
     {
         assert( false );
         return false;
@@ -209,8 +263,7 @@ static bool ReadTriangleRecording( FrameRecording::TrianglesEntry & outEntry, st
 
     // read matrix (if any)
     char hasMatrix = 0;
-    inStream.read( (char*)&hasMatrix, sizeof( hasMatrix ) );
-    if( inStream.gcount( ) != sizeof( hasMatrix ) )
+    if( inStream.Read( (char*)&hasMatrix, sizeof( hasMatrix ) ) != sizeof( hasMatrix ) )
     {
         assert( false );
         return false;
@@ -218,8 +271,7 @@ static bool ReadTriangleRecording( FrameRecording::TrianglesEntry & outEntry, st
 
     if( (outEntry.mHasModelToClipMatrix = (hasMatrix != 0)) )
     {
-        inStream.read( (char*)outEntry.mModelToClipMatrix, 16 * sizeof( float ) );
-        if( inStream.gcount( ) != 16 * sizeof( float ) )
+        if( inStream.Read( (char*)outEntry.mModelToClipMatrix, 16 * sizeof( float ) ) != 16 * sizeof( float ) )
         {
             assert( false );
             return false;
@@ -230,19 +282,21 @@ static bool ReadTriangleRecording( FrameRecording::TrianglesEntry & outEntry, st
         memset( outEntry.mModelToClipMatrix, 0, 16 * sizeof( float ) );
     }
 
-    inStream.read( (char*)&outEntry.mClipPlaneMask, sizeof( outEntry.mClipPlaneMask ) );
-    if( inStream.gcount( ) != sizeof( outEntry.mClipPlaneMask ) )
+    if( inStream.Read( (char*)&outEntry.mClipPlaneMask, sizeof( outEntry.mClipPlaneMask ) ) != sizeof( outEntry.mClipPlaneMask ) )
     {
         assert( false );
         return false;
     }
 
     // read triangle cull winding
-    inStream.read( (char*)&outEntry.mbfWinding, sizeof( outEntry.mbfWinding ) );
+    if( inStream.Read( (char*)&outEntry.mbfWinding, sizeof( outEntry.mbfWinding ) ) != sizeof( outEntry.mbfWinding ) )
+    {
+        assert( false );
+        return false;
+    }
 
     // read vertex layout
-    inStream.read( (char*)&outEntry.mVertexLayout, sizeof( outEntry.mVertexLayout ) );
-    if( inStream.gcount( ) != sizeof( outEntry.mVertexLayout ) )
+    if( inStream.Read( (char*)&outEntry.mVertexLayout, sizeof( outEntry.mVertexLayout ) ) != sizeof( outEntry.mVertexLayout ) )
     {
         assert( false );
         return false;
@@ -257,43 +311,35 @@ static bool ReadTriangleRecording( FrameRecording::TrianglesEntry & outEntry, st
 
 void FrameRecorder::RecordClearBuffer( )
 {
-    assert( mOutStream.is_open( ) );
-
     char header = 3;
-    mOutStream.write( &header, 1 );
+    Write( &header, 1 );
 }
 
 void FrameRecorder::RecordRenderTriangles( MaskedOcclusionCulling::CullingResult cullingResult, const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix, MaskedOcclusionCulling::ClipPlanes clipPlaneMask, MaskedOcclusionCulling::BackfaceWinding bfWinding, const MaskedOcclusionCulling::VertexLayout & vtxLayout )
 {
-    assert( mOutStream.is_open( ) );
-
     char header = 0;
-    mOutStream.write( &header, 1 );
-    WriteTriangleRecording( mOutStream, cullingResult, inVtx, inTris, nTris, modelToClipMatrix, clipPlaneMask, bfWinding, vtxLayout );
+    Write( &header, 1 );
+    WriteTriangleRecording( cullingResult, inVtx, inTris, nTris, modelToClipMatrix, clipPlaneMask, bfWinding, vtxLayout );
 }
 
 void FrameRecorder::RecordTestRect( MaskedOcclusionCulling::CullingResult cullingResult, float xmin, float ymin, float xmax, float ymax, float wmin )
 {
-    assert( mOutStream.is_open( ) );
-
     char header = 1;
-    mOutStream.write( &header, 1 );
+    Write( &header, 1 );
 
-    mOutStream.write( (const char*)&cullingResult, sizeof( cullingResult ) );
-    mOutStream.write( (const char*)&xmin, sizeof( xmin ) );
-    mOutStream.write( (const char*)&ymin, sizeof( ymin ) );
-    mOutStream.write( (const char*)&xmax, sizeof( xmax ) );
-    mOutStream.write( (const char*)&ymax, sizeof( ymax ) );
-    mOutStream.write( (const char*)&wmin, sizeof( wmin ) );
+    Write( &cullingResult, sizeof( cullingResult ) );
+    Write( &xmin, sizeof( xmin ) );
+    Write( &ymin, sizeof( ymin ) );
+    Write( &xmax, sizeof( xmax ) );
+    Write( &ymax, sizeof( ymax ) );
+    Write( &wmin, sizeof( wmin ) );
 }
 
 void FrameRecorder::RecordTestTriangles( MaskedOcclusionCulling::CullingResult cullingResult, const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix, MaskedOcclusionCulling::ClipPlanes clipPlaneMask, MaskedOcclusionCulling::BackfaceWinding bfWinding, const MaskedOcclusionCulling::VertexLayout & vtxLayout )
 {
-    assert( mOutStream.is_open( ) );
-
     char header = 2;
-    mOutStream.write( &header, 1 );
-    WriteTriangleRecording( mOutStream, cullingResult, inVtx, inTris, nTris, modelToClipMatrix, clipPlaneMask, bfWinding, vtxLayout );
+    Write( &header, 1 );
+    WriteTriangleRecording( cullingResult, inVtx, inTris, nTris, modelToClipMatrix, clipPlaneMask, bfWinding, vtxLayout );
 }
 
 
@@ -305,30 +351,37 @@ bool FrameRecording::Load( const char * inputFilePath, FrameRecording & outRecor
 {
     outRecording.Reset();
 
-    std::ifstream inStream( inputFilePath, std::ios::binary );
-    if( !inStream.is_open( ) )
+#if MOC_RECORDER_USE_STDIO_FILE
+    FILE * inIOFile = 0;
+    if( fopen_s( &inIOFile, inputFilePath, "rb" ) != 0 )
+        return false;
+    InStreamWrapper inStream( inIOFile );
+#else
+    std::ifstream inIOStream( inputFilePath, std::ios::binary );
+    if( !inIOStream.is_open( ) )
     {
         return false;
     }
+    InStreamWrapper inStream( std::move(inIOStream) );
+#endif
     
     // for file verification purposes
     unsigned int fileHeader = 0;
-    inStream.read( (char *)&fileHeader, sizeof( fileHeader ) );
-    if( (inStream.gcount() != 4) || (fileHeader != 0xA701B600) )
+    if( ( inStream.Read( (char *)&fileHeader, sizeof( fileHeader ) ) != 4 ) || (fileHeader != 0xA701B600) )
     {
+        assert( false );
         return false;
     }
 
-    inStream.read( (char *)&outRecording.mNearClipPlane, sizeof( outRecording.mNearClipPlane ) );
-    inStream.read( (char *)&outRecording.mResolutionWidth, sizeof( outRecording.mResolutionWidth ) );
-    inStream.read( (char *)&outRecording.mResolutionHeight, sizeof( outRecording.mResolutionHeight ) );
+    if( inStream.Read( (char *)&outRecording.mNearClipPlane,    sizeof( outRecording.mNearClipPlane )       ) != sizeof( outRecording.mNearClipPlane )    )     { assert( false ); return false; }
+    if( inStream.Read( (char *)&outRecording.mResolutionWidth,  sizeof( outRecording.mResolutionWidth )     ) != sizeof( outRecording.mResolutionWidth )  )     { assert( false ); return false; }
+    if( inStream.Read( (char *)&outRecording.mResolutionHeight, sizeof( outRecording.mResolutionHeight )    ) != sizeof( outRecording.mResolutionHeight ) )     { assert( false ); return false; }
 
     bool continueLoading = true;
     while( continueLoading )
     {
         char chunkHeader = 0;
-        inStream.read( (char *)&chunkHeader, sizeof( chunkHeader ) );
-        if( (inStream.gcount() != 1) )
+        if( inStream.Read( (char *)&chunkHeader, sizeof( chunkHeader ) ) != 1 )
         {
             assert( false );
             outRecording.Reset();
@@ -355,8 +408,7 @@ bool FrameRecording::Load( const char * inputFilePath, FrameRecording & outRecor
                 int rectEntryIndex = (int)outRecording.mRectEntries.size( )-1;
 
                 // read rectangle in one go
-                inStream.read( (char*)&outRecording.mRectEntries[rectEntryIndex], sizeof( outRecording.mRectEntries[rectEntryIndex] ) );
-                if( inStream.gcount( ) != sizeof( outRecording.mRectEntries[rectEntryIndex] ) )
+                if( inStream.Read( (char*)&outRecording.mRectEntries[rectEntryIndex], sizeof( outRecording.mRectEntries[rectEntryIndex] ) ) != sizeof( outRecording.mRectEntries[rectEntryIndex] ) )
                 {
                     assert( false );
                     outRecording.Reset( );
