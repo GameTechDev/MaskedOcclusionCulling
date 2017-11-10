@@ -358,7 +358,7 @@ int main(int argc, char* argv[])
 	}
 #endif
 
-    printf( "Instruction set:" );
+    printf( "\nInstruction set:" );
     switch( moc->GetImplementation( ) )
     {
     case MaskedOcclusionCulling::SSE2:
@@ -378,6 +378,10 @@ int main(int argc, char* argv[])
 
     };
 
+#if 0 && ENABLE_RECORDER
+    moc->RecorderStart( "..\\FrameRecorderPlayer\\FillrateTest.mocrec" );
+#endif
+
 	printf("\n\nMasked single threaded\n");
 	printf("----\n");
 	for (int i = 0; i < numSizes; ++i)
@@ -388,6 +392,10 @@ int main(int argc, char* argv[])
 		double MTrisPerSecond = (double)numTriangles[i] / (1e6 * t);
 		printf("Tri: %3dx%3d - Time: %7.2f ms, MTris/s: %6.2f GPixels/s: %5.2f \n", size, size, t * 1000.0f, MTrisPerSecond, GPixelsPerSecond);
 	}
+
+#if 0 && ENABLE_RECORDER
+    moc->RecorderStop( );
+#endif
 
 	int numThreads = std::thread::hardware_concurrency() - 1;
 	printf("\n\nMasked multi threaded (%d threads)\n", numThreads);

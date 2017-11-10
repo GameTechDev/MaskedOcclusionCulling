@@ -444,7 +444,7 @@ int main(int argc, char* argv[])
 	printf("%d / %d triangles passed\n", nPassed, nTriangles);
 
 	int numThreads = std::thread::hardware_concurrency() - 1;
-	printf("\n\nTesting Masked multi threaded code path (using binning)\n", numThreads);
+	printf("\n\nTesting Masked multi threaded code path (using binning), %d threads\n", numThreads);
 	printf("----\n");
 	CullingThreadpool ctp(numThreads, 2, numThreads);
 	ctp.SetBuffer(moc);
