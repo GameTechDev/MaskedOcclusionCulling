@@ -88,22 +88,22 @@
 
 #endif
 
-#ifndef ENABLE_RECORDER
+#ifndef MOC_RECORDER_ENABLE
 /*!
- * Define ENABLE_RECORDER to 1 to enable frame recorder (see FrameRecorder.h/cpp for details)
+ * Define MOC_RECORDER_ENABLE to 1 to enable frame recorder (see FrameRecorder.h/cpp for details)
  */
-#define ENABLE_RECORDER		0
+#define MOC_RECORDER_ENABLE		0
 
 #endif
 
 
-#if ENABLE_RECORDER
+#if MOC_RECORDER_ENABLE
 
 #include <mutex>
 
 class FrameRecorder;
 
-#endif // #if ENABLE_RECORDER
+#endif // #if MOC_RECORDER_ENABLE
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -492,7 +492,12 @@ public:
 	 */
 	static void TransformVertices(const float *mtx, const float *inVtx, float *xfVtx, unsigned int nVtx, const VertexLayout &vtxLayout = VertexLayout(12, 4, 8));
 
-#if ENABLE_RECORDER
+	/*!
+	 * \brief Get used memory alloc/free callbacks.
+     */
+    void GetAllocFreeCallback( pfnAlignedAlloc & allocCallback, pfnAlignedFree & freeCallback ) { allocCallback = mAlignedAllocCallback, freeCallback = mAlignedFreeCallback; }
+
+#if MOC_RECORDER_ENABLE
     /*!
 	 * \brief Start recording subsequent rasterization and testing calls using the FrameRecorder.
      *        The function calls that are recorded are:
@@ -546,7 +551,7 @@ public:
     // merge the binned data back into original layout; in this case, call it manually from your Threadpool implementation (already added to CullingThreadpool).
     // If recording is not enabled, calling this function will do nothing.
     void RecordRenderTriangles( const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix = nullptr, ClipPlanes clipPlaneMask = CLIP_PLANE_ALL, BackfaceWinding bfWinding = BACKFACE_CW, const VertexLayout &vtxLayout = VertexLayout( 16, 4, 12 ), CullingResult cullingResult = (CullingResult)-1 );
-#endif // #if ENABLE_RECORDER
+#endif // #if MOC_RECORDER_ENABLE
 
 protected:
 	pfnAlignedAlloc mAlignedAllocCallback;
@@ -554,10 +559,10 @@ protected:
 
 	mutable OcclusionCullingStatistics mStats;
 
-#if ENABLE_RECORDER
+#if MOC_RECORDER_ENABLE
     mutable FrameRecorder * mRecorder;
     mutable std::mutex mRecorderMutex;
-#endif // #if ENABLE_RECORDER
+#endif // #if MOC_RECORDER_ENABLE
 
 	virtual ~MaskedOcclusionCulling() {}
 };

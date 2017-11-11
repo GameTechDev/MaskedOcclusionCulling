@@ -151,7 +151,7 @@ public:
 		mMaskedHiZBuffer = nullptr;
 		mAlignedAllocCallback = alignedAlloc;
 		mAlignedFreeCallback = alignedFree;
-#if ENABLE_RECORDER
+#if MOC_RECORDER_ENABLE
         mRecorder = nullptr;
 #endif
 
@@ -173,7 +173,7 @@ public:
 			mAlignedFreeCallback(mMaskedHiZBuffer);
 		mMaskedHiZBuffer = nullptr;
 
-#if ENABLE_RECORDER
+#if MOC_RECORDER_ENABLE
         assert( mRecorder == nullptr ); // forgot to call StopRecording()?
 #endif
 	}
@@ -277,7 +277,7 @@ public:
 		memset(&mStats, 0, sizeof(OcclusionCullingStatistics));
 #endif
 
-#if ENABLE_RECORDER != 0
+#if MOC_RECORDER_ENABLE != 0
         {
             std::lock_guard<std::mutex> lock( mRecorderMutex );
             if( mRecorder != nullptr ) mRecorder->RecordClearBuffer();
@@ -1508,7 +1508,7 @@ public:
         else
             retVal = (CullingResult)RenderTriangles<0, 0>(inVtx, inTris, nTris, modelToClipMatrix, bfWinding, clipPlaneMask, vtxLayout);
 
-#if ENABLE_RECORDER
+#if MOC_RECORDER_ENABLE
         RecordRenderTriangles( inVtx, inTris, nTris, modelToClipMatrix, clipPlaneMask, bfWinding, vtxLayout, retVal );
 #endif
 		return retVal;
@@ -1527,7 +1527,7 @@ public:
         else
 		    retVal = (CullingResult)RenderTriangles<1, 0>(inVtx, inTris, nTris, modelToClipMatrix, bfWinding, clipPlaneMask, vtxLayout);
 
-#if ENABLE_RECORDER
+#if MOC_RECORDER_ENABLE
         {
             std::lock_guard<std::mutex> lock( mRecorderMutex );
             if( mRecorder != nullptr ) mRecorder->RecordTestTriangles( retVal, inVtx, inTris, nTris, modelToClipMatrix, clipPlaneMask, bfWinding, vtxLayout );
@@ -1568,7 +1568,7 @@ public:
 
 		if (simd_i32(tileBBoxi)[0] == simd_i32(tileBBoxi)[1] || simd_i32(tileBBoxi)[2] == simd_i32(tileBBoxi)[3])
         {
-#if ENABLE_RECORDER
+#if MOC_RECORDER_ENABLE
             {
                 std::lock_guard<std::mutex> lock( mRecorderMutex );
                 if( mRecorder != nullptr ) mRecorder->RecordTestRect( CullingResult::VIEW_CULLED, xmin, ymin, xmax, ymax, wmin );
@@ -1627,7 +1627,7 @@ public:
 				// If not all tiles failed the conservative z test we can immediately terminate the test
 				if (!_mmw_testz_epi32(zPass, zPass))
                 {
-#if ENABLE_RECORDER
+#if MOC_RECORDER_ENABLE
                     {
                         std::lock_guard<std::mutex> lock( mRecorderMutex );
                         if( mRecorder != nullptr ) mRecorder->RecordTestRect( CullingResult::VISIBLE, xmin, ymin, xmax, ymax, wmin );
@@ -1646,7 +1646,7 @@ public:
 				break;
 			pixelY = _mmw_add_epi32(pixelY, _mmw_set1_epi32(TILE_HEIGHT));
 		}
-#if ENABLE_RECORDER
+#if MOC_RECORDER_ENABLE
         {
             std::lock_guard<std::mutex> lock( mRecorderMutex );
             if( mRecorder != nullptr ) mRecorder->RecordTestRect( CullingResult::OCCLUDED, xmin, ymin, xmax, ymax, wmin );

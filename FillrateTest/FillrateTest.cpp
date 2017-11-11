@@ -378,7 +378,7 @@ int main(int argc, char* argv[])
 
     };
 
-#if 0 && ENABLE_RECORDER
+#if 0 && MOC_RECORDER_ENABLE
     moc->RecorderStart( "..\\FrameRecorderPlayer\\FillrateTest.mocrec" );
 #endif
 
@@ -393,7 +393,7 @@ int main(int argc, char* argv[])
 		printf("Tri: %3dx%3d - Time: %7.2f ms, MTris/s: %6.2f GPixels/s: %5.2f \n", size, size, t * 1000.0f, MTrisPerSecond, GPixelsPerSecond);
 	}
 
-#if 0 && ENABLE_RECORDER
+#if 0 && MOC_RECORDER_ENABLE
     moc->RecorderStop( );
 #endif
 

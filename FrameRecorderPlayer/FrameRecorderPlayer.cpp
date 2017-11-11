@@ -30,8 +30,12 @@
 #include "../MaskedOcclusionCulling.h"
 #include "../FrameRecorder.h"
 
-#if !ENABLE_RECORDER
-#error This project needs to be compiled with ENABLE_RECORDER set to 1
+#if !MOC_RECORDER_ENABLE
+#error This project needs to be compiled with MOC_RECORDER_ENABLE set to 1
+#endif
+
+#if !MOC_RECORDER_ENABLE_PLAYBACK
+#error This project needs to be compiled with MOC_RECORDER_ENABLE_PLAYBACK set to 1
 #endif
 
 ////////////////////////////////////////////////////////////////////////////////////////

@@ -432,7 +432,7 @@ void CullingThreadpool::ClearBuffer()
 
 void CullingThreadpool::RenderTriangles(const float *inVtx, const unsigned int *inTris, int nTris, BackfaceWinding bfWinding, ClipPlanes clipPlaneMask)
 {
-#if ENABLE_RECORDER != 0
+#if MOC_RECORDER_ENABLE != 0
     mMOC->RecordRenderTriangles( inVtx, inTris, nTris, mCurrentMatrix, clipPlaneMask, bfWinding, *mVertexLayouts.GetData( ) );
 #endif
 

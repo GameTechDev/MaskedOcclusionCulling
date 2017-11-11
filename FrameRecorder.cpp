@@ -15,7 +15,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include "FrameRecorder.h"
 
-#if ENABLE_RECORDER
+#if MOC_RECORDER_ENABLE
 #include <assert.h>
 #include <algorithm>
 
@@ -35,13 +35,18 @@ bool MaskedOcclusionCulling::RecorderStart( const char * outputFilePath ) const
     FILE * f;
     if( fopen_s( &f, outputFilePath, "wb" ) != 0 )
         return false;
-    mRecorder = new FrameRecorder( f, *this );
 #else
     std::ofstream outStream( outputFilePath, std::ios::out | std::ios::trunc | std::ios::binary );
     if( !outStream.is_open( ) )
         return false;
-    mRecorder = new FrameRecorder( std::move( outStream ), *this );
 #endif
+    mRecorder = (FrameRecorder *)mAlignedAllocCallback( 64, sizeof( FrameRecorder ) );
+#if MOC_RECORDER_USE_STDIO_FILE
+    new (mRecorder) FrameRecorder( f, *this );
+#else
+    new (mRecorder) FrameRecorder( std::move( outStream ), *this );
+#endif
+
     return true;
 }
 
@@ -49,7 +54,8 @@ void MaskedOcclusionCulling::RecorderStop( ) const
 {
     std::lock_guard<std::mutex> lock( mRecorderMutex );
 
-    delete mRecorder;
+    mRecorder->~FrameRecorder();
+    mAlignedFreeCallback( mRecorder );
     mRecorder = nullptr;
 }
 
@@ -204,6 +210,47 @@ namespace
     };
 }
 
+void FrameRecorder::RecordClearBuffer( )
+{
+    char header = 3;
+    Write( &header, 1 );
+}
+
+void FrameRecorder::RecordRenderTriangles( MaskedOcclusionCulling::CullingResult cullingResult, const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix, MaskedOcclusionCulling::ClipPlanes clipPlaneMask, MaskedOcclusionCulling::BackfaceWinding bfWinding, const MaskedOcclusionCulling::VertexLayout & vtxLayout )
+{
+    char header = 0;
+    Write( &header, 1 );
+    WriteTriangleRecording( cullingResult, inVtx, inTris, nTris, modelToClipMatrix, clipPlaneMask, bfWinding, vtxLayout );
+}
+
+void FrameRecorder::RecordTestRect( MaskedOcclusionCulling::CullingResult cullingResult, float xmin, float ymin, float xmax, float ymax, float wmin )
+{
+    char header = 1;
+    Write( &header, 1 );
+
+    Write( &cullingResult, sizeof( cullingResult ) );
+    Write( &xmin, sizeof( xmin ) );
+    Write( &ymin, sizeof( ymin ) );
+    Write( &xmax, sizeof( xmax ) );
+    Write( &ymax, sizeof( ymax ) );
+    Write( &wmin, sizeof( wmin ) );
+}
+
+void FrameRecorder::RecordTestTriangles( MaskedOcclusionCulling::CullingResult cullingResult, const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix, MaskedOcclusionCulling::ClipPlanes clipPlaneMask, MaskedOcclusionCulling::BackfaceWinding bfWinding, const MaskedOcclusionCulling::VertexLayout & vtxLayout )
+{
+    char header = 2;
+    Write( &header, 1 );
+    WriteTriangleRecording( cullingResult, inVtx, inTris, nTris, modelToClipMatrix, clipPlaneMask, bfWinding, vtxLayout );
+}
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Masked occlusion culling recording
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if MOC_RECORDER_ENABLE_PLAYBACK
+
 static bool ReadTriangleRecording( FrameRecording::TrianglesEntry & outEntry, InStreamWrapper & inStream )
 {
     // read culling result
@@ -240,7 +287,7 @@ static bool ReadTriangleRecording( FrameRecording::TrianglesEntry & outEntry, In
 
     // read vertices
     outEntry.mVertices.resize( vertexSize / 4 * vertexCount );  // pre-allocate data
-    if( inStream.Read( (char*) outEntry.mVertices.data(), vertexSize * vertexCount ) != (vertexSize * vertexCount) )
+    if( inStream.Read( (char*)outEntry.mVertices.data( ), vertexSize * vertexCount ) != ( vertexSize * vertexCount ) )
     {
         assert( false );
         return false;
@@ -269,7 +316,7 @@ static bool ReadTriangleRecording( FrameRecording::TrianglesEntry & outEntry, In
         return false;
     }
 
-    if( (outEntry.mHasModelToClipMatrix = (hasMatrix != 0)) )
+    if( ( outEntry.mHasModelToClipMatrix = ( hasMatrix != 0 ) ) )
     {
         if( inStream.Read( (char*)outEntry.mModelToClipMatrix, 16 * sizeof( float ) ) != 16 * sizeof( float ) )
         {
@@ -308,44 +355,6 @@ static bool ReadTriangleRecording( FrameRecording::TrianglesEntry & outEntry, In
     }
     return true;
 }
-
-void FrameRecorder::RecordClearBuffer( )
-{
-    char header = 3;
-    Write( &header, 1 );
-}
-
-void FrameRecorder::RecordRenderTriangles( MaskedOcclusionCulling::CullingResult cullingResult, const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix, MaskedOcclusionCulling::ClipPlanes clipPlaneMask, MaskedOcclusionCulling::BackfaceWinding bfWinding, const MaskedOcclusionCulling::VertexLayout & vtxLayout )
-{
-    char header = 0;
-    Write( &header, 1 );
-    WriteTriangleRecording( cullingResult, inVtx, inTris, nTris, modelToClipMatrix, clipPlaneMask, bfWinding, vtxLayout );
-}
-
-void FrameRecorder::RecordTestRect( MaskedOcclusionCulling::CullingResult cullingResult, float xmin, float ymin, float xmax, float ymax, float wmin )
-{
-    char header = 1;
-    Write( &header, 1 );
-
-    Write( &cullingResult, sizeof( cullingResult ) );
-    Write( &xmin, sizeof( xmin ) );
-    Write( &ymin, sizeof( ymin ) );
-    Write( &xmax, sizeof( xmax ) );
-    Write( &ymax, sizeof( ymax ) );
-    Write( &wmin, sizeof( wmin ) );
-}
-
-void FrameRecorder::RecordTestTriangles( MaskedOcclusionCulling::CullingResult cullingResult, const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix, MaskedOcclusionCulling::ClipPlanes clipPlaneMask, MaskedOcclusionCulling::BackfaceWinding bfWinding, const MaskedOcclusionCulling::VertexLayout & vtxLayout )
-{
-    char header = 2;
-    Write( &header, 1 );
-    WriteTriangleRecording( cullingResult, inVtx, inTris, nTris, modelToClipMatrix, clipPlaneMask, bfWinding, vtxLayout );
-}
-
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Masked occlusion culling recording
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 bool FrameRecording::Load( const char * inputFilePath, FrameRecording & outRecording )
 {
@@ -438,4 +447,6 @@ bool FrameRecording::Load( const char * inputFilePath, FrameRecording & outRecor
     return true;
 }
 
-#endif // #if ENABLE_RECORDER
+#endif // #if MOC_RECORDER_ENABLE_PLAYBACK
+
+#endif // #if MOC_RECORDER_ENABLE

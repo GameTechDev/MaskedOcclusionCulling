@@ -19,7 +19,7 @@
 #include "MaskedOcclusionCulling.h"
 #include "CompilerSpecific.inl"
 
-#if ENABLE_RECORDER
+#if MOC_RECORDER_ENABLE
 #include "FrameRecorder.h"
 #endif
 
