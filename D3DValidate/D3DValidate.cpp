@@ -179,7 +179,7 @@ bool D3DValidateTriangle(float *verts, MaskedOcclusionCulling *moc)
 
 	// Read back result
 	float *depthBuffer = new float[width*height];
-	moc->ComputePixelDepthBuffer(depthBuffer);
+	moc->ComputePixelDepthBuffer(depthBuffer, false);
 
 	////////////////////////////////////////////////////////////////////////////////////////
 	// Draw triangle using DirectX 11 and read back color image
@@ -261,7 +261,7 @@ bool D3DValidateTriangleThreaded(float *verts, unsigned int width, unsigned int 
 
 	// Read back result
 	float *depthBuffer = new float[width*height];
-	ctp->ComputePixelDepthBuffer(depthBuffer);
+	ctp->ComputePixelDepthBuffer(depthBuffer, false);
 
 	////////////////////////////////////////////////////////////////////////////////////////
 	// Draw triangle using DirectX 11 and read back color image

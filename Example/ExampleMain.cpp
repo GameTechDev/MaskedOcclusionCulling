@@ -184,7 +184,7 @@ int main(int argc, char* argv[])
 
 	// Compute a per pixel depth buffer from the hierarchical depth buffer, used for visualization.
 	float *perPixelZBuffer = new float[width * height];
-	moc->ComputePixelDepthBuffer(perPixelZBuffer);
+	moc->ComputePixelDepthBuffer(perPixelZBuffer, false);
 
 	// Tonemap the image
 	unsigned char *image = new unsigned char[width * height * 3];

@@ -305,5 +305,5 @@ public:
 	 *        MaskedOcclusionCulling::ComputePixelDepthBuffer(). This method causes a Flush() to 
 	 *        ensure that all unfinished rendering is completed.
 	 */
-	void ComputePixelDepthBuffer(float *depthData);
+	void ComputePixelDepthBuffer(float *depthData, bool flipY);
 };

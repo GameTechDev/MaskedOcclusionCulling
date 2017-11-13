@@ -460,7 +460,7 @@ public:
 	 * \param depthData Pointer to memory where the per-pixel depth data is written. Must
 	 *        hold storage for atleast width*height elements as set by setResolution.
 	 */
-	virtual void ComputePixelDepthBuffer(float *depthData) = 0;
+	virtual void ComputePixelDepthBuffer(float *depthData, bool flipY) = 0;
 	
 	/*!
 	 * \brief Fetch occlusion culling statistics, returns zeroes if ENABLE_STATS define is

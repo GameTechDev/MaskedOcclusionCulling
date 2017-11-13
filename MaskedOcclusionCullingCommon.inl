@@ -1901,7 +1901,7 @@ public:
 		return gInstructionSet;
 	}
 
-	void ComputePixelDepthBuffer(float *depthData) override
+	void ComputePixelDepthBuffer(float *depthData, bool flipY) override
 	{
 		assert(mMaskedHiZBuffer != nullptr);
 		for (int y = 0; y < mHeight; y++)
@@ -1926,11 +1926,10 @@ public:
 				int pixelLayer = (simd_i32(mMaskedHiZBuffer[tileIdx].mMask)[subTileIdx] >> bitIdx) & 1;
 				float pixelDepth = simd_f32(mMaskedHiZBuffer[tileIdx].mZMin[pixelLayer])[subTileIdx];
 
-#if USE_D3D != 0
-                depthData[( mHeight - y - 1 ) * mWidth + x] = pixelDepth;
-#else
-                depthData[y * mWidth + x] = pixelDepth;
-#endif
+                if( flipY )
+                    depthData[( mHeight - y - 1 ) * mWidth + x] = pixelDepth;
+                else
+                    depthData[y * mWidth + x] = pixelDepth;
 			}
 		}
 	}

@@ -465,8 +465,8 @@ CullingThreadpool::CullingResult CullingThreadpool::TestTriangles(const float *i
 	return mMOC->TestTriangles(inVtx, inTris, nTris, mCurrentMatrix, bfWinding, clipPlaneMask, *mVertexLayouts.GetData());
 }
 
-void CullingThreadpool::ComputePixelDepthBuffer(float *depthData)
+void CullingThreadpool::ComputePixelDepthBuffer(float *depthData, bool flipY)
 {
 	Flush();
-	mMOC->ComputePixelDepthBuffer(depthData);
+	mMOC->ComputePixelDepthBuffer(depthData, flipY);
 }
