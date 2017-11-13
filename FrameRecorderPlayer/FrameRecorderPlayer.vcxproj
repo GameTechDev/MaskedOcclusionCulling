@@ -155,6 +155,11 @@
     <ClCompile Include="..\MaskedOcclusionCullingAVX512.cpp">
       <EnableEnhancedInstructionSet Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
       <EnableEnhancedInstructionSet Condition="'$(Configuration)|$(Platform)'=='Release|x64'">AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release_LLVM|x64'">-mavx512f -mavx512bw -mavx512dq %(AdditionalOptions)</AdditionalOptions>
+      <FunctionLevelLinking Condition="'$(Configuration)|$(Platform)'=='Release_LLVM|x64'">false</FunctionLevelLinking>
+      <EnableEnhancedInstructionSet Condition="'$(Configuration)|$(Platform)'=='Release_LLVM|x64'">AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
+      <EnableEnhancedInstructionSet Condition="'$(Configuration)|$(Platform)'=='Debug_LLVM|x64'">AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Debug_LLVM|x64'">-mavx512f -mavx512bw -mavx512dq %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <ClCompile Include="FrameRecorderPlayer.cpp" />
   </ItemGroup>
