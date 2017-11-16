@@ -45,7 +45,7 @@
  * balance between performance and low leakage. If QUICK_MASK is defined to 0, use the algorithm from
  * "Masked Depth Culling for Graphics Hardware" which has less leakage, but also lower performance.
  */
-#define QUICK_MASK          1
+#define QUICK_MASK                      1
 
 #endif
 
@@ -54,10 +54,9 @@
  * Configures the library for use with Direct3D (default) or OpenGL rendering. This changes whether the 
  * screen space Y axis points downwards (D3D) or upwards (OGL), and is primarily important in combination 
  * with the PRECISE_COVERAGE define, where this is important to ensure correct rounding and tie-breaker
- * behaviour. It also affects the ScissorRect screen space coordinates and the memory layout of the buffer 
- * returned by ComputePixelDepthBuffer().
+ * behaviour. It also affects the ScissorRect screen space coordinates.
  */
-#define USE_D3D             1
+#define USE_D3D                         1
 
 #endif
 
@@ -66,16 +65,25 @@
  * Define PRECISE_COVERAGE to 1 to more closely match GPU rasterization rules. The increased precision comes
  * at a cost of slightly lower performance.
  */
-#define PRECISE_COVERAGE    0
+#define PRECISE_COVERAGE                0
 
 #endif
 
 #ifndef USE_AVX512
 /*!
- * Define USE_AVX512 to 1 to enable experimental AVX-512 support. It'currently mostly untested and only
+ * Define USE_AVX512 to 1 to enable experimental AVX-512 support. It's currently mostly untested and only
  * validated on simple examples using Intel SDE. Older compilers may not support AVX-512 intrinsics.
  */
-#define USE_AVX512          0
+#define USE_AVX512                      0
+
+#endif
+
+#ifndef CLIPPING_PRESERVES_ORDER
+/*!
+ * Define CLIPPING_PRESERVES_ORDER to 1 to prevent clipping from reordering triangle rasterization
+ * order; This comes at a cost (approx 3-4%) but removes one source of temporal frame-to-frame instability.
+ */
+#define CLIPPING_PRESERVES_ORDER        1
 
 #endif
 
@@ -84,7 +92,7 @@
  * Define ENABLE_STATS to 1 to gather various statistics during occlusion culling. Can be used for profiling 
  * and debugging. Note that enabling this function will reduce performance significantly.
  */
-#define ENABLE_STATS        0
+#define ENABLE_STATS                    0
 
 #endif
 
@@ -92,8 +100,18 @@
 /*!
  * Define MOC_RECORDER_ENABLE to 1 to enable frame recorder (see FrameRecorder.h/cpp for details)
  */
-#define MOC_RECORDER_ENABLE		0
+#define MOC_RECORDER_ENABLE		        0
 
+#endif
+
+#if MOC_RECORDER_ENABLE
+#ifndef MOC_RECORDER_ENABLE_PLAYBACK
+/*!
+ * Define MOC_RECORDER_ENABLE_PLAYBACK to 1 to enable compilation of the playback code (not needed 
+   for recording)
+ */
+#define MOC_RECORDER_ENABLE_PLAYBACK    0
+#endif
 #endif
 
 

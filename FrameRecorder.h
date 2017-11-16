@@ -47,13 +47,6 @@
 
 #if MOC_RECORDER_ENABLE
 
-#ifndef MOC_RECORDER_ENABLE_PLAYBACK
-/*!
- * Whether to enable compilation of the playback code (not needed for recording only)
- */
-#define MOC_RECORDER_ENABLE_PLAYBACK        0
-#endif
-
 #if MOC_RECORDER_USE_STDIO_FILE
 #include <stdio.h>
 #else
