@@ -369,8 +369,56 @@ public:
 		TestClipPlane<ClipPlanes::CLIP_PLANE_BOTTOM>(vtxX, vtxY, vtxW, straddleMask[3], triMask, clipPlaneMask);
 		TestClipPlane<ClipPlanes::CLIP_PLANE_TOP>(vtxX, vtxY, vtxW, straddleMask[4], triMask, clipPlaneMask);
 
-		// Clip triangle against straddling planes and add to the clipped triangle buffer
+        // Clip triangle against straddling planes and add to the clipped triangle buffer
 		__m128 vtxBuf[2][8];
+
+#if CLIPPING_PRESERVES_ORDER != 0
+		unsigned int clipMask = triClipMask & triMask;
+		unsigned int clipAndStraddleMask = (straddleMask[0] | straddleMask[1] | straddleMask[2] | straddleMask[3] | straddleMask[4]) & clipMask;
+        // no clipping needed after all - early out
+        if (clipAndStraddleMask == 0)
+			return;
+		while( clipMask )
+		{
+			// Find and setup next triangle to clip
+			unsigned int triIdx = find_clear_lsb(&clipMask);
+			unsigned int triBit = (1U << triIdx);
+			assert(triIdx < SIMD_LANES);
+
+			int bufIdx = 0;
+			int nClippedVerts = 3;
+			for (int i = 0; i < 3; i++)
+				vtxBuf[0][i] = _mm_setr_ps(simd_f32(vtxX[i])[triIdx], simd_f32(vtxY[i])[triIdx], simd_f32(vtxW[i])[triIdx], 1.0f);
+
+			// Clip triangle with straddling planes. 
+			for (int i = 0; i < 5; ++i)
+			{
+				if ((straddleMask[i] & triBit) && (clipPlaneMask & (1 << i))) // <- second part maybe not needed?
+				{
+					nClippedVerts = ClipPolygon(vtxBuf[bufIdx ^ 1], vtxBuf[bufIdx], mCSFrustumPlanes[i], nClippedVerts);
+					bufIdx ^= 1;
+				}
+			}
+
+			if (nClippedVerts >= 3)
+			{
+                // Write all triangles into the clip buffer and process them next loop iteration
+				clippedTrisBuffer[clipWriteIdx * 3 + 0] = vtxBuf[bufIdx][0];
+				clippedTrisBuffer[clipWriteIdx * 3 + 1] = vtxBuf[bufIdx][1];
+				clippedTrisBuffer[clipWriteIdx * 3 + 2] = vtxBuf[bufIdx][2];
+				clipWriteIdx = (clipWriteIdx + 1) & (MAX_CLIPPED - 1);
+				for (int i = 2; i < nClippedVerts - 1; i++)
+				{
+					clippedTrisBuffer[clipWriteIdx * 3 + 0] = vtxBuf[bufIdx][0];
+					clippedTrisBuffer[clipWriteIdx * 3 + 1] = vtxBuf[bufIdx][i];
+					clippedTrisBuffer[clipWriteIdx * 3 + 2] = vtxBuf[bufIdx][i + 1];
+					clipWriteIdx = (clipWriteIdx + 1) & (MAX_CLIPPED - 1);
+				}
+			}
+		}
+        // since all triangles were copied to clip buffer for next iteration, skip further processing
+		triMask = 0;
+#else
 		unsigned int clipMask = (straddleMask[0] | straddleMask[1] | straddleMask[2] | straddleMask[3] | straddleMask[4]) & (triClipMask & triMask);
 		while (clipMask)
 		{
@@ -415,6 +463,7 @@ public:
 			else // Kill triangles that was removed by clipping
 				triMask &= ~triBit;
 		}
+#endif
 	}
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1379,68 +1428,10 @@ public:
 		int triIndex = 0;
 		while (triIndex < nTris || clipHead != clipTail)
 		{
-			//////////////////////////////////////////////////////////////////////////////
-			// Assemble triangles from the index list
-			//////////////////////////////////////////////////////////////////////////////
-			__mw vtxX[3], vtxY[3], vtxW[3];
-			unsigned int triMask = SIMD_ALL_LANES_MASK, triClipMask = SIMD_ALL_LANES_MASK;
+            __mw vtxX[3], vtxY[3], vtxW[3];
+            unsigned int triMask = SIMD_ALL_LANES_MASK;
 
-			if (clipHead != clipTail)
-			{
-				int clippedTris = clipHead > clipTail ? clipHead - clipTail : MAX_CLIPPED + clipHead - clipTail;
-				clippedTris = min(clippedTris, SIMD_LANES);
-
-				// Fill out SIMD registers by fetching more triangles. 
-				numLanes = max(0, min(SIMD_LANES - clippedTris, nTris - triIndex));
-				if (numLanes > 0) {
-					if (FAST_GATHER)
-						GatherVerticesFast(vtxX, vtxY, vtxW, inVtx, inTrisPtr, numLanes);
-					else
-						GatherVertices(vtxX, vtxY, vtxW, inVtx, inTrisPtr, numLanes, vtxLayout);
-
-					TransformVerts(vtxX, vtxY, vtxW, modelToClipMatrix);
-				}
-
-				for (int clipTri = numLanes; clipTri < numLanes + clippedTris; clipTri++)
-				{
-					int triIdx = clipTail * 3;
-					for (int i = 0; i < 3; i++)
-					{
-						simd_f32(vtxX[i])[clipTri] = simd_f32(clipTriBuffer[triIdx + i])[0];
-						simd_f32(vtxY[i])[clipTri] = simd_f32(clipTriBuffer[triIdx + i])[1];
-						simd_f32(vtxW[i])[clipTri] = simd_f32(clipTriBuffer[triIdx + i])[2];
-					}
-					clipTail = (clipTail + 1) & (MAX_CLIPPED-1);
-				}
-
-				triIndex += numLanes;
-				inTrisPtr += numLanes * 3;
-
-				triMask = (1U << (clippedTris + numLanes)) - 1;
-				triClipMask = (1U << numLanes) - 1; // Don't re-clip already clipped triangles
-			}
-			else
-			{
-				numLanes = min(SIMD_LANES, nTris - triIndex);
-				triMask = (1U << numLanes) - 1;
-				triClipMask = triMask;
-
-				if (FAST_GATHER)
-					GatherVerticesFast(vtxX, vtxY, vtxW, inVtx, inTrisPtr, numLanes);
-				else
-					GatherVertices(vtxX, vtxY, vtxW, inVtx, inTrisPtr, numLanes, vtxLayout);
-
-				TransformVerts(vtxX, vtxY, vtxW, modelToClipMatrix);
-				triIndex += SIMD_LANES;
-				inTrisPtr += SIMD_LANES*3;
-			}
-
-			//////////////////////////////////////////////////////////////////////////////
-			// Clip transformed triangles
-			//////////////////////////////////////////////////////////////////////////////
-
-			if (clipPlaneMask != ClipPlanes::CLIP_PLANE_NONE)
-				ClipTriangleAndAddToBuffer(vtxX, vtxY, vtxW, clipTriBuffer, clipHead, triMask, triClipMask, clipPlaneMask);
+            GatherTransformClip<FAST_GATHER>( clipHead, clipTail, numLanes, nTris, triIndex, vtxX, vtxY, vtxW, inVtx, inTrisPtr, vtxLayout, modelToClipMatrix, clipTriBuffer, triMask, clipPlaneMask );
 
 			if (triMask == 0x0)
 				continue;
@@ -1674,69 +1665,10 @@ public:
 		int triIndex = 0;
 		while (triIndex < nTris || clipHead != clipTail)
 		{
-			//////////////////////////////////////////////////////////////////////////////
-			// Assemble triangles from the index list 
-			//////////////////////////////////////////////////////////////////////////////
-			__mw vtxX[3], vtxY[3], vtxW[3];
-			unsigned int triMask = SIMD_ALL_LANES_MASK, triClipMask = SIMD_ALL_LANES_MASK;
+            unsigned int triMask = SIMD_ALL_LANES_MASK;
+            __mw vtxX[3], vtxY[3], vtxW[3];
 
-			if (clipHead != clipTail)
-			{
-				int clippedTris = clipHead > clipTail ? clipHead - clipTail : MAX_CLIPPED + clipHead - clipTail;
-				clippedTris = min(clippedTris, SIMD_LANES);
-
-				// Fill out SIMD registers by fetching more triangles. 
-				numLanes = max(0, min(SIMD_LANES - clippedTris, nTris - triIndex));
-				if (numLanes > 0) {
-					if (FAST_GATHER)
-						GatherVerticesFast(vtxX, vtxY, vtxW, inVtx, inTrisPtr, numLanes);
-					else
-						GatherVertices(vtxX, vtxY, vtxW, inVtx, inTrisPtr, numLanes, vtxLayout);
-
-					TransformVerts(vtxX, vtxY, vtxW, modelToClipMatrix);
-				}
-
-				for (int clipTri = numLanes; clipTri < numLanes + clippedTris; clipTri++)
-				{
-					int triIdx = clipTail * 3;
-					for (int i = 0; i < 3; i++)
-					{
-						simd_f32(vtxX[i])[clipTri] = simd_f32(clipTriBuffer[triIdx + i])[0];
-						simd_f32(vtxY[i])[clipTri] = simd_f32(clipTriBuffer[triIdx + i])[1];
-						simd_f32(vtxW[i])[clipTri] = simd_f32(clipTriBuffer[triIdx + i])[2];
-					}
-					clipTail = (clipTail + 1) & (MAX_CLIPPED - 1);
-				}
-
-				triIndex += numLanes;
-				inTrisPtr += numLanes * 3;
-
-				triMask = (1U << (clippedTris + numLanes)) - 1;
-				triClipMask = (1U << numLanes) - 1; // Don't re-clip already clipped triangles
-			}
-			else
-			{
-				numLanes = min(SIMD_LANES, nTris - triIndex);
-				triMask = (1U << numLanes) - 1;
-				triClipMask = triMask;
-
-				if (FAST_GATHER)
-					GatherVerticesFast(vtxX, vtxY, vtxW, inVtx, inTrisPtr, numLanes);
-				else
-					GatherVertices(vtxX, vtxY, vtxW, inVtx, inTrisPtr, numLanes, vtxLayout);
-
-				TransformVerts(vtxX, vtxY, vtxW, modelToClipMatrix);
-
-				triIndex += SIMD_LANES;
-				inTrisPtr += SIMD_LANES * 3;
-			}
-
-			//////////////////////////////////////////////////////////////////////////////
-			// Clip transformed triangles
-			//////////////////////////////////////////////////////////////////////////////
-
-			if (clipPlaneMask != ClipPlanes::CLIP_PLANE_NONE)
-				ClipTriangleAndAddToBuffer(vtxX, vtxY, vtxW, clipTriBuffer, clipHead, triMask, triClipMask, clipPlaneMask);
+            GatherTransformClip<FAST_GATHER>( clipHead, clipTail, numLanes, nTris, triIndex, vtxX, vtxY, vtxW, inVtx, inTrisPtr, vtxLayout, modelToClipMatrix, clipTriBuffer, triMask, clipPlaneMask );
 
 			if (triMask == 0x0)
 				continue;
@@ -1828,6 +1760,82 @@ public:
 		else
 			BinTriangles<false>(inVtx, inTris, nTris, triLists, nBinsW, nBinsH, modelToClipMatrix, bfWinding, clipPlaneMask, vtxLayout);
 	}
+
+    template<int FAST_GATHER>
+    void GatherTransformClip( int & clipHead, int & clipTail, int & numLanes, int nTris, int & triIndex, __mw * vtxX, __mw * vtxY, __mw * vtxW, const float * inVtx, const unsigned int * &inTrisPtr, const VertexLayout & vtxLayout, const float * modelToClipMatrix, __m128 * clipTriBuffer, unsigned int &triMask, ClipPlanes clipPlaneMask )
+    {
+        //////////////////////////////////////////////////////////////////////////////
+        // Assemble triangles from the index list 
+        //////////////////////////////////////////////////////////////////////////////
+        unsigned int triClipMask = SIMD_ALL_LANES_MASK;
+
+        if( clipHead != clipTail )
+        {
+            int clippedTris = clipHead > clipTail ? clipHead - clipTail : MAX_CLIPPED + clipHead - clipTail;
+            clippedTris = min( clippedTris, SIMD_LANES );
+
+#if CLIPPING_PRESERVES_ORDER != 0
+            // if preserving order, don't mix clipped and new triangles, handle the clip buffer fully
+            // and then continue gathering; this is not as efficient - ideally we want to gather
+            // at the end (if clip buffer has less than SIMD_LANES triangles) but that requires
+            // more modifications below - something to do in the future.
+            numLanes = 0;
+#else
+            // Fill out SIMD registers by fetching more triangles. 
+            numLanes = max( 0, min( SIMD_LANES - clippedTris, nTris - triIndex ) );
+#endif
+
+            if( numLanes > 0 ) {
+                if( FAST_GATHER )
+                    GatherVerticesFast( vtxX, vtxY, vtxW, inVtx, inTrisPtr, numLanes );
+                else
+                    GatherVertices( vtxX, vtxY, vtxW, inVtx, inTrisPtr, numLanes, vtxLayout );
+
+                TransformVerts( vtxX, vtxY, vtxW, modelToClipMatrix );
+            }
+
+            for( int clipTri = numLanes; clipTri < numLanes + clippedTris; clipTri++ )
+            {
+                int triIdx = clipTail * 3;
+                for( int i = 0; i < 3; i++ )
+                {
+                    simd_f32( vtxX[i] )[clipTri] = simd_f32( clipTriBuffer[triIdx + i] )[0];
+                    simd_f32( vtxY[i] )[clipTri] = simd_f32( clipTriBuffer[triIdx + i] )[1];
+                    simd_f32( vtxW[i] )[clipTri] = simd_f32( clipTriBuffer[triIdx + i] )[2];
+                }
+                clipTail = ( clipTail + 1 ) & ( MAX_CLIPPED - 1 );
+            }
+
+            triIndex += numLanes;
+            inTrisPtr += numLanes * 3;
+
+            triMask = ( 1U << ( clippedTris + numLanes ) ) - 1;
+            triClipMask = ( 1U << numLanes ) - 1; // Don't re-clip already clipped triangles
+        }
+        else
+        {
+            numLanes = min( SIMD_LANES, nTris - triIndex );
+            triMask = ( 1U << numLanes ) - 1;
+            triClipMask = triMask;
+
+            if( FAST_GATHER )
+                GatherVerticesFast( vtxX, vtxY, vtxW, inVtx, inTrisPtr, numLanes );
+            else
+                GatherVertices( vtxX, vtxY, vtxW, inVtx, inTrisPtr, numLanes, vtxLayout );
+
+            TransformVerts( vtxX, vtxY, vtxW, modelToClipMatrix );
+
+            triIndex += SIMD_LANES;
+            inTrisPtr += SIMD_LANES * 3;
+        }
+
+        //////////////////////////////////////////////////////////////////////////////
+        // Clip transformed triangles
+        //////////////////////////////////////////////////////////////////////////////
+
+        if( clipPlaneMask != ClipPlanes::CLIP_PLANE_NONE )
+            ClipTriangleAndAddToBuffer( vtxX, vtxY, vtxW, clipTriBuffer, clipHead, triMask, triClipMask, clipPlaneMask );
+    }
 
 	void RenderTrilist(const TriList &triList, const ScissorRect *scissor) override
 	{
