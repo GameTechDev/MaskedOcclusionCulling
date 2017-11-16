@@ -35,6 +35,9 @@ std::uniform_real_distribution<float> gRndUniform(0, 1);
 
 #define F_PI 3.14159265358979323846f
 
+// if 1, makes some of the random triangles slightly out of screen and enables clipping
+#define TEST_CLIPPING 0
+
 #ifdef _WIN32
 ////////////////////////////////////////////////////////////////////////////////////////
 // DX 11 setup & resource creation code
@@ -230,6 +233,13 @@ inline float frand() { return (float)rand() / (float)RAND_MAX; }
 
 void GenerateRandomTriangles(float *verts, unsigned int *triIdxBtF, int nTris, int size, float width, float height)
 {
+    // make some of the triangles slightly out of screen to test clipping paths
+#if TEST_CLIPPING
+    const float clippingMul = 1.1f;
+#else
+    const float clippingMul = 1.0f;
+#endif
+
 	for (int idx = 0; idx < nTris; ++idx)
 	{
 		triIdxBtF[idx * 3 + 0] = idx * 3 + 0;
@@ -256,8 +266,8 @@ void GenerateRandomTriangles(float *verts, unsigned int *triIdxBtF, int nTris, i
 				float z = myz / (float)nTris;
 
 				int vtxIdx = idx * 3 + i;
-				verts[vtxIdx * 4 + 0] = rvtx[i][0] * myz;
-				verts[vtxIdx * 4 + 1] = rvtx[i][1] * myz;
+				verts[vtxIdx * 4 + 0] = rvtx[i][0] * myz * clippingMul;
+				verts[vtxIdx * 4 + 1] = rvtx[i][1] * myz * clippingMul;
 				verts[vtxIdx * 4 + 2] = z * myz;
 				verts[vtxIdx * 4 + 3] = myz;
 			}
@@ -272,7 +282,11 @@ double BenchmarkTriangles(float *verts, unsigned int *tris, int numTriangles, Ma
 	moc->ClearBuffer();
 
 	auto before = std::chrono::high_resolution_clock::now();
+#if TEST_CLIPPING
+    moc->RenderTriangles( verts, tris, numTriangles, nullptr, MaskedOcclusionCulling::BACKFACE_CW, MaskedOcclusionCulling::CLIP_PLANE_ALL );
+#else
 	moc->RenderTriangles(verts, tris, numTriangles, nullptr, MaskedOcclusionCulling::BACKFACE_CW, MaskedOcclusionCulling::CLIP_PLANE_NONE);
+#endif
 	auto after = std::chrono::high_resolution_clock::now();
 
 	return std::chrono::duration<double>(after - before).count();
@@ -283,7 +297,11 @@ double BenchmarkTrianglesThreaded(float *verts, unsigned int *tris, int numTrian
 	ctp->ClearBuffer();
 
 	auto before = std::chrono::high_resolution_clock::now();
-	ctp->RenderTriangles(verts, tris, numTriangles, MaskedOcclusionCulling::BACKFACE_CW, MaskedOcclusionCulling::CLIP_PLANE_NONE);
+#if TEST_CLIPPING
+    ctp->RenderTriangles(verts, tris, numTriangles, MaskedOcclusionCulling::BACKFACE_CW, MaskedOcclusionCulling::CLIP_PLANE_ALL);
+#else
+    ctp->RenderTriangles( verts, tris, numTriangles, MaskedOcclusionCulling::BACKFACE_CW, MaskedOcclusionCulling::CLIP_PLANE_NONE );
+#endif
 	ctp->Flush();
 	auto after = std::chrono::high_resolution_clock::now();
 
@@ -296,7 +314,7 @@ double BenchmarkTrianglesThreaded(float *verts, unsigned int *tris, int numTrian
 
 int main(int argc, char* argv[])
 {
-	const int width = 1024, height = 1024;
+	const int width = 1920, height = 1080;
 
 	// Flush denorms to zero to avoid performance issues with small values
 	_mm_setcsr(_mm_getcsr() | 0x8040);
@@ -333,7 +351,7 @@ int main(int argc, char* argv[])
 	{
 		float *pVerts = new float[numTriangles[i] * 4 * 3];
 		unsigned int *pTrisBtF = new unsigned int[numTriangles[i] * 3];
-		GenerateRandomTriangles(pVerts, pTrisBtF, numTriangles[i], sizes[i], 1024.0f, 1024.0f);
+		GenerateRandomTriangles(pVerts, pTrisBtF, numTriangles[i], sizes[i], (float)width, (float)height);
 		verts.push_back(pVerts);
 		trisBtF.push_back(pTrisBtF);
 #ifdef _WIN32
