@@ -57,7 +57,7 @@ template<typename T> FORCE_INLINE T min(const T &a, const T &b) { return a < b ?
 // Maximum number of triangles that may be generated during clipping. We process SIMD_LANES triangles at a time and
 // clip against 5 planes, so the max should be 5*8 = 40 (we immediately draw the first clipped triangle).
 // This number must be a power of two.
-#define MAX_CLIPPED             64
+#define MAX_CLIPPED             (8*SIMD_LANES)
 #define MAX_CLIPPED_WRAP        (MAX_CLIPPED - 1)
 
 // Size of guard band in pixels. Clipping doesn't seem to be very expensive so we use a small guard band
