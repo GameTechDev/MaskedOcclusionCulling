@@ -62,6 +62,11 @@
 		return idx;
 	}
 
+	FORCE_INLINE void *aligned_alloc(size_t alignment, size_t size)
+	{
+		return memalign(alignment, size);
+	}
+
 	FORCE_INLINE void aligned_free(void *ptr)
 	{
 		free(ptr);
