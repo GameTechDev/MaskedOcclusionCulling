@@ -54,7 +54,7 @@ static MaskedOcclusionCulling::Implementation DetectCPUFeatures(MaskedOcclusionC
 
     //cpuIdEx.resize(regs[0] - 0x80000000);
     size_t cpuIdExCount = regs[0] - 0x80000000;
-    CpuInfo * cpuIdEx = (CpuInfo*)alignedAlloc( 64, sizeof( CpuInfo ) * cpuIdCount );
+    CpuInfo * cpuIdEx = (CpuInfo*)alignedAlloc( 64, sizeof( CpuInfo ) * cpuIdExCount );
 
     for (size_t i = 0; i < cpuIdExCount; ++i)
 		__cpuidex(cpuIdEx[i].regs, 0x80000000 + (int)i, 0);
