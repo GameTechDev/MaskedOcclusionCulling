@@ -48,6 +48,11 @@
 
 #elif defined(__GNUG__)	|| defined(__clang__) // G++ or clang
 	#include <cpuid.h>
+#if defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__)
+	#include <malloc/malloc.h> // memalign
+#else
+	#include <malloc.h> // memalign
+#endif
 	#include <mm_malloc.h>
 	#include <immintrin.h>
 	#include <new>
