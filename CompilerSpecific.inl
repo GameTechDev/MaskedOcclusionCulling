@@ -48,6 +48,11 @@
 
 #elif defined(__GNUG__)	|| defined(__clang__) // G++ or clang
 	#include <cpuid.h>
+#if defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__)
+	#include <malloc/malloc.h> // memalign
+#else
+	#include <malloc.h> // memalign
+#endif
 	#include <mm_malloc.h>
 	#include <immintrin.h>
 	#include <new>
@@ -60,6 +65,11 @@
 		idx = __builtin_ctzl(*mask);
 		*mask &= *mask - 1;
 		return idx;
+	}
+
+	FORCE_INLINE void *aligned_alloc(size_t alignment, size_t size)
+	{
+		return memalign(alignment, size);
 	}
 
 	FORCE_INLINE void aligned_free(void *ptr)
