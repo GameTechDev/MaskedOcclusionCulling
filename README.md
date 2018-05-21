@@ -4,6 +4,10 @@ This code accompanies the research paper ["Masked Software Occlusion Culling"](h
 and implements an efficient alternative to the hierarchical depth buffer algorithm. Our algorithm decouples depth values and coverage, and operates directly
 on the hierarchical depth buffer. It lets us efficiently parallelize both coverage computations and hierarchical depth buffer updates.
 
+## Update May 2018
+
+Added the ability to merge 2 depth buffers, this allows both an alterative method for parallelizing buffer creation and a way to reduce silhouette bleed when input data cannot be roughly sorted from front to back, for example rendering large terrain patches with foreground occluders in an open world game engine.
+
 ## Requirements
 
 This code is mainly optimized for AVX capable CPUs. However, we also provide SSE 4.1 and SSE 2 implementations for backwards compatibility. The appropriate 
@@ -405,6 +409,9 @@ cmake -DUSE_AVX512=ON -G"Visual Studio 14 2015 Win64" -T"LLVM-vs2014" ..
 
 ## Version History
 
+* Version 1.4: 
+  * Added support for merging 2 depth buffers as detailed in GDC 2018 presenation.
+  * Fixed Profiling counters to be thread safe removing a race condition when runing the CullingThreadpool class.
 * Version 1.3: 
   * **Experimental**: Added support for AVX-512 capable CPUs. Currently only verified through [emulator](https://software.intel.com/en-us/articles/intel-software-development-emulator).
   * Added multiplatform support. Code now compiles on Visual C++ Compiler, Intel C++ Compiler, GCC, and Clang.

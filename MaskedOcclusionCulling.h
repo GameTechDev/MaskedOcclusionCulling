@@ -242,6 +242,7 @@ public:
 			long long mNumRasterizedTriangles; //!< Number of occluder triangles passing view frustum and backface culling
 			long long mNumTilesTraversed;      //!< Number of tiles traversed by the rasterizer
 			long long mNumTilesUpdated;        //!< Number of tiles where the hierarchical z buffer was updated
+			long long mNumTilesMerged;        //!< Number of tiles where the hierarchical z buffer was updated
 		} mOccluders;
 
 		struct
@@ -260,14 +261,14 @@ public:
 	/*!
 	 * \brief Creates a new object with default state, no z buffer attached/allocated.
 	 */
-	static MaskedOcclusionCulling *Create();
+	static MaskedOcclusionCulling *Create(Implementation RequestedSIMD = AVX512);
 	
 	/*!
 	 * \brief Creates a new object with default state, no z buffer attached/allocated.
 	 * \param alignedAlloc Pointer to a callback function used when allocating memory
 	 * \param alignedFree Pointer to a callback function used when freeing memory
 	 */
-	static MaskedOcclusionCulling *Create(pfnAlignedAlloc alignedAlloc, pfnAlignedFree alignedFree);
+	static MaskedOcclusionCulling *Create(Implementation RequestedSIMD, pfnAlignedAlloc alignedAlloc, pfnAlignedFree alignedFree);
 
 	/*!
 	 * \brief Destroys an object and frees the z buffer memory. Note that you cannot 
@@ -323,6 +324,11 @@ public:
 	 * \brief Clears the hierarchical depth buffer.
 	 */
 	virtual void ClearBuffer() = 0;
+
+	/*!
+	* \brief Merge a second hierarchical depth buffer into the main buffer.
+	*/
+	virtual void MergeBuffer(MaskedOcclusionCulling* BufferB) = 0;
 
 	/*! 
 	 * \brief Renders a mesh of occluder triangles and updates the hierarchical z buffer

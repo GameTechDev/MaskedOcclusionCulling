@@ -71,7 +71,7 @@ template<typename T> FORCE_INLINE T min(const T &a, const T &b) { return a < b ?
 
 // Only gather statistics if enabled.
 #if ENABLE_STATS != 0
-	#define STATS_ADD(var, val)     (var) += (val)
+	#define STATS_ADD(var, val)     _InterlockedExchangeAdd64( &var, val )
 #else
 	#define STATS_ADD(var, val)
 #endif
@@ -284,6 +284,104 @@ public:
         }
 #endif
 	}
+
+
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// MergeBuffer
+	// Utility Function merges another MOC buffer into the existing one
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	void MergeBuffer(MaskedOcclusionCulling* BufferB) override
+	{
+		assert(mMaskedHiZBuffer != nullptr);
+
+		//// Iterate through all depth tiles and merge the 2 tiles
+		for (int i = 0; i < mTilesWidth * mTilesHeight; i++)
+		{
+			__mw *zMinB = ((MaskedOcclusionCullingPrivate*)BufferB)->mMaskedHiZBuffer[i].mZMin;
+			__mw *zMinA = mMaskedHiZBuffer[i].mZMin;
+			__mwi RastMaskB = ((MaskedOcclusionCullingPrivate*)BufferB)->mMaskedHiZBuffer[i].mMask;
+
+#if QUICK_MASK != 0
+			// Clear z0 to beyond infinity to ensure we never merge with clear data
+			__mwi sign0 = _mmw_srai_epi32(simd_cast<__mwi>(zMinB[0]), 31);
+			// Only merge tiles that have data in zMinB[0], use the sign bit to determine if they are still in a clear state
+			sign0 = _mmw_cmpeq_epi32(sign0, SIMD_BITS_ZERO);
+			if (!_mmw_testz_epi32(sign0, sign0))
+			{
+				STATS_ADD(mStats.mOccluders.mNumTilesMerged, 1);
+				zMinA[0] = _mmw_max_ps(zMinA[0], zMinB[0]);
+
+				__mwi rastMask = mMaskedHiZBuffer[i].mMask;
+				__mwi deadLane = _mmw_cmpeq_epi32(rastMask, SIMD_BITS_ZERO);
+				// Mask out all subtiles failing the depth test (don't update these subtiles)
+				deadLane = _mmw_or_epi32(deadLane, _mmw_srai_epi32(simd_cast<__mwi>(_mmw_sub_ps(zMinA[1], zMinA[0])), 31));
+				mMaskedHiZBuffer[i].mMask = _mmw_andnot_epi32(deadLane, rastMask);
+			}
+
+			// Set 32bit value to -1 if any pixels are set incide the coverage mask for a subtile
+			__mwi LiveTile = _mmw_cmpeq_epi32(RastMaskB, SIMD_BITS_ZERO);
+			// invert to have bits set for clear subtiles
+			__mwi t0inv = _mmw_not_epi32(LiveTile);
+			// VPTEST sets the ZF flag if all the resulting bits are 0 (ie if all tiles are clear)
+			if (!_mmw_testz_epi32(t0inv, t0inv))
+			{
+				STATS_ADD(mStats.mOccluders.mNumTilesMerged, 1);
+				UpdateTileQuick(i, RastMaskB, zMinB[1]);
+			}
+#else 
+			// Clear z0 to beyond infinity to ensure we never merge with clear data
+			__mwi sign1 = _mmw_srai_epi32(simd_cast<__mwi>(mMaskedHiZBuffer[i].mZMin[0]), 31);
+			// Only merge tiles that have data in zMinB[0], use the sign bit to determine if they are still in a clear state
+			sign1 = _mmw_cmpeq_epi32(sign1, SIMD_BITS_ZERO);
+
+			// Set 32bit value to -1 if any pixels are set incide the coverage mask for a subtile
+			__mwi LiveTile1 = _mmw_cmpeq_epi32(mMaskedHiZBuffer[i].mMask, SIMD_BITS_ZERO);
+			// invert to have bits set for clear subtiles
+			__mwi t1inv = _mmw_not_epi32(LiveTile1);
+			// VPTEST sets the ZF flag if all the resulting bits are 0 (ie if all tiles are clear)
+			if (_mmw_testz_epi32(sign1, sign1) && _mmw_testz_epi32(t1inv, t1inv))
+			{
+				mMaskedHiZBuffer[i].mMask = ((MaskedOcclusionCullingPrivate*)BufferB)->mMaskedHiZBuffer[i].mMask;
+				mMaskedHiZBuffer[i].mZMin[0] = zMinB[0];
+				mMaskedHiZBuffer[i].mZMin[1] = zMinB[1];
+			}
+			else
+			{
+				// Clear z0 to beyond infinity to ensure we never merge with clear data
+				__mwi sign0 = _mmw_srai_epi32(simd_cast<__mwi>(zMinB[0]), 31);
+				sign0 = _mmw_cmpeq_epi32(sign0, SIMD_BITS_ZERO);
+				// Only merge tiles that have data in zMinB[0], use the sign bit to determine if they are still in a clear state
+				if (!_mmw_testz_epi32(sign0, sign0))
+				{
+					// build a mask for Zmin[0], full if the layer has been completed, or partial if tile is still partly filled.
+					// cant just use the completement of the mask, as tiles might not get updated by merge 
+					__mwi sign1 = _mmw_srai_epi32(simd_cast<__mwi>(zMinB[1]), 31);
+					__mwi LayerMask0 = _mmw_not_epi32(sign1);
+					__mwi LayerMask1 = _mmw_not_epi32(((MaskedOcclusionCullingPrivate*)BufferB)->mMaskedHiZBuffer[i].mMask);
+					__mwi rastMask = _mmw_or_epi32(LayerMask0, LayerMask1);
+
+					UpdateTileAccurate(i, rastMask, zMinB[0]);
+				}
+
+				// Set 32bit value to -1 if any pixels are set incide the coverage mask for a subtile
+				__mwi LiveTile = _mmw_cmpeq_epi32(((MaskedOcclusionCullingPrivate*)BufferB)->mMaskedHiZBuffer[i].mMask, SIMD_BITS_ZERO);
+				// invert to have bits set for clear subtiles
+				__mwi t0inv = _mmw_not_epi32(LiveTile);
+				// VPTEST sets the ZF flag if all the resulting bits are 0 (ie if all tiles are clear)
+				if (!_mmw_testz_epi32(t0inv, t0inv))
+				{
+					UpdateTileAccurate(i, ((MaskedOcclusionCullingPrivate*)BufferB)->mMaskedHiZBuffer[i].mMask, zMinB[1]);
+				}
+
+				if (_mmw_testz_epi32(sign0, sign0) && _mmw_testz_epi32(t0inv, t0inv))
+					STATS_ADD(mStats.mOccluders.mNumTilesMerged, 1);
+
+			}
+
+#endif
+		}
+	}
+
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Polygon clipping functions
@@ -707,7 +805,7 @@ public:
 		__mw *zMin = mMaskedHiZBuffer[tileIdx].mZMin;
 
 		// Swizzle coverage mask to 8x4 subtiles and test if any subtiles are not covered at all
-		__mwi rastMask = _mmw_transpose_epi8(coverage);
+		__mwi rastMask = coverage;
 		__mwi deadLane = _mmw_cmpeq_epi32(rastMask, SIMD_BITS_ZERO);
 
 		// Mask out all subtiles failing the depth test (don't update these subtiles)
@@ -745,7 +843,7 @@ public:
 		__mwi &mask = mMaskedHiZBuffer[tileIdx].mMask;
 
 		// Swizzle coverage mask to 8x4 subtiles
-		__mwi rastMask = _mmw_transpose_epi8(coverage);
+		__mwi rastMask = coverage;
 
 		// Perform individual depth tests with layer 0 & 1 and mask out all failing pixels 
 		__mw sdist0 = _mmw_sub_ps(zMin[0], zTriv);
@@ -871,9 +969,9 @@ public:
 					// Compute interpolated min for each 8x4 subtile and update the masked hierarchical z buffer entry
 					__mw zSubTileMin = _mmw_max_ps(z0, zTriMin);
 #if QUICK_MASK != 0
-					UpdateTileQuick(tileIdx, accumulatedMask, zSubTileMin);
+					UpdateTileQuick(tileIdx, _mmw_transpose_epi8(accumulatedMask), zSubTileMin);
 #else 
-					UpdateTileAccurate(tileIdx, accumulatedMask, zSubTileMin);
+					UpdateTileAccurate(tileIdx, _mmw_transpose_epi8(accumulatedMask), zSubTileMin);
 #endif
 				}
 			}
@@ -1409,9 +1507,9 @@ public:
 		assert(mMaskedHiZBuffer != nullptr);
 
 		if (TEST_Z)
-			STATS_ADD(mStats.mOccludees.mNumProcessedTriangles, 1);
+			STATS_ADD(mStats.mOccludees.mNumProcessedTriangles, nTris);
 		else
-			STATS_ADD(mStats.mOccluders.mNumProcessedTriangles, 1);
+			STATS_ADD(mStats.mOccluders.mNumProcessedTriangles, nTris);
 
 #if PRECISE_COVERAGE != 0
 		int originalRoundingMode = _MM_GET_ROUNDING_MODE();
@@ -1655,6 +1753,8 @@ public:
 		int originalRoundingMode = _MM_GET_ROUNDING_MODE();
 		_MM_SET_ROUNDING_MODE(_MM_ROUND_NEAREST);
 #endif
+
+		STATS_ADD(mStats.mOccluders.mNumProcessedTriangles, nTris);
 
 		int clipHead = 0;
 		int clipTail = 0;

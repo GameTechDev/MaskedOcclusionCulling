@@ -416,16 +416,19 @@ namespace MaskedOcclusionCullingAVX2
 	extern MaskedOcclusionCulling *CreateMaskedOcclusionCulling(pfnAlignedAlloc alignedAlloc, pfnAlignedFree alignedFree);
 }
 
-MaskedOcclusionCulling *MaskedOcclusionCulling::Create()
+MaskedOcclusionCulling *MaskedOcclusionCulling::Create(Implementation RequestedSIMD)
 {
-	return Create(aligned_alloc, aligned_free);
+	return Create(RequestedSIMD, aligned_alloc, aligned_free);
 }
 
-MaskedOcclusionCulling *MaskedOcclusionCulling::Create(pfnAlignedAlloc alignedAlloc, pfnAlignedFree alignedFree)
+MaskedOcclusionCulling *MaskedOcclusionCulling::Create(Implementation RequestedSIMD, pfnAlignedAlloc alignedAlloc, pfnAlignedFree alignedFree)
 {
 	MaskedOcclusionCulling *object = nullptr;
 
 	MaskedOcclusionCulling::Implementation impl = DetectCPUFeatures(alignedAlloc, alignedFree);
+
+	if (RequestedSIMD < impl)
+		impl = RequestedSIMD;
 
 	// Return best supported version
 	if (object == nullptr && impl >= AVX512)
