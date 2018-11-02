@@ -192,7 +192,6 @@ typedef __m128i __mwi;
 #define _mmw_srai_epi32             _mm_srai_epi32
 #define _mmw_srli_epi32             _mm_srli_epi32
 #define _mmw_slli_epi32             _mm_slli_epi32
-#define _mmw_abs_epi32              _mm_abs_epi32
 #define _mmw_cvtps_epi32            _mm_cvtps_epi32
 #define _mmw_cvttps_epi32           _mm_cvttps_epi32
 
@@ -254,6 +253,7 @@ namespace MaskedOcclusionCullingSSE41
 	FORCE_INLINE __m128i _mmw_mullo_epi32(const __m128i &a, const __m128i &b) { return _mm_mullo_epi32(a, b); }
 	FORCE_INLINE __m128i _mmw_min_epi32(const __m128i &a, const __m128i &b) { return _mm_min_epi32(a, b); }
 	FORCE_INLINE __m128i _mmw_max_epi32(const __m128i &a, const __m128i &b) { return _mm_max_epi32(a, b); }
+	FORCE_INLINE __m128i _mmw_abs_epi32(const __m128i &a) { return _mm_abs_epi32(a); }
 	FORCE_INLINE __m128 _mmw_blendv_ps(const __m128 &a, const __m128 &b, const __m128 &c) { return _mm_blendv_ps(a, b, c); }
 	FORCE_INLINE int _mmw_testz_epi32(const __m128i &a, const __m128i &b) { return _mm_testz_si128(a, b); }
 	FORCE_INLINE __m128 _mmx_dp4_ps(const __m128 &a, const __m128 &b) { return _mm_dp_ps(a, b, 0xFF); }
@@ -322,6 +322,11 @@ namespace MaskedOcclusionCullingSSE2
 	{ 
 		__m128i cond = _mm_cmpgt_epi32(b, a);
 		return _mm_or_si128(_mm_andnot_si128(cond, a), _mm_and_si128(cond, b));
+	}
+	FORCE_INLINE __m128i _mmw_abs_epi32(const __m128i &a)
+	{
+		__m128i mask = _mm_cmplt_epi32(a, _mm_setzero_si128());
+		return _mm_add_epi32(_mm_xor_si128(a, mask), _mm_srli_epi32(mask, 31));
 	}
 	FORCE_INLINE int _mmw_testz_epi32(const __m128i &a, const __m128i &b)
 	{ 
