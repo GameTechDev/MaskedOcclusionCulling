@@ -42,7 +42,10 @@ SET_SOURCE_FILES_PROPERTIES( ${MOC_AVX2_FILES} PROPERTIES COMPILE_FLAGS "/arch:A
 #
 # Setup compiler flags for SSE4.1 / SSE2 files (MSVC)
 #
-SET_SOURCE_FILES_PROPERTIES( ${MOC_SSE_FILES} PROPERTIES COMPILE_FLAGS "/arch:SSE2" )
+if(NOT "${CMAKE_GENERATOR}" MATCHES "(Win64|IA64)")
+	# SSE2 is always enabled on 64-bit architectures, specifying redundant flag produces a compiler warning
+	SET_SOURCE_FILES_PROPERTIES( ${MOC_SSE_FILES} PROPERTIES COMPILE_FLAGS "/arch:SSE2" )
+endif()
 
 else()
 
