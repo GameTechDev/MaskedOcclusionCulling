@@ -18,7 +18,9 @@ set( MOC_FILES ${MOC_AVX512_FILES} ${MOC_AVX2_FILES} ${MOC_SSE_FILES} ${MOC_INCL
 # Common compiler flags 
 #
 if(MSVC)
-	set(CMAKE_CXX_FLAGS "-std=c++11")
+	if(MSVC_VERSION LESS 1900)
+		set(CMAKE_CXX_FLAGS "-std=c++11")
+	endif()
 else()
 	set(CMAKE_CXX_FLAGS "-std=c++11 -m64")
 endif()
@@ -44,7 +46,9 @@ SET_SOURCE_FILES_PROPERTIES( ${MOC_AVX2_FILES} PROPERTIES COMPILE_FLAGS "/arch:A
 #
 if(NOT "${CMAKE_GENERATOR}" MATCHES "(Win64|IA64)")
 	# SSE2 is always enabled on 64-bit architectures, specifying redundant flag produces a compiler warning
-	SET_SOURCE_FILES_PROPERTIES( ${MOC_SSE_FILES} PROPERTIES COMPILE_FLAGS "/arch:SSE2" )
+	if(MSVC_VERSION LESS 1900)
+		SET_SOURCE_FILES_PROPERTIES( ${MOC_SSE_FILES} PROPERTIES COMPILE_FLAGS "/arch:SSE2" )
+	endif()
 endif()
 
 else()
