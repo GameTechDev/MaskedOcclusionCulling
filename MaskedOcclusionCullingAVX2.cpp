@@ -202,6 +202,52 @@ FORCE_INLINE void GatherVertices(__m256 *vtxX, __m256 *vtxY, __m256 *vtxW, const
 	}
 }
 
+FORCE_INLINE void GatherVertices(__m256 *vtxX, __m256 *vtxY, __m256 *vtxW, const float *inVtx, const unsigned short *inTrisPtr, int numLanes, const VertexLayout &vtxLayout)
+{
+	unsigned int IndexList[SIMD_LANES * 3];
+
+	assert(numLanes >= 1);
+
+	const __m256i SIMD_TRI_IDX_OFFSET = _mm256_setr_epi32(0, 3, 6, 9, 12, 15, 18, 21);
+	static const __m256i SIMD_LANE_MASK[9] = {
+		_mm256_setr_epi32(0,  0,  0,  0,  0,  0,  0,  0),
+		_mm256_setr_epi32(~0,  0,  0,  0,  0,  0,  0,  0),
+		_mm256_setr_epi32(~0, ~0,  0,  0,  0,  0,  0,  0),
+		_mm256_setr_epi32(~0, ~0, ~0,  0,  0,  0,  0,  0),
+		_mm256_setr_epi32(~0, ~0, ~0, ~0,  0,  0,  0,  0),
+		_mm256_setr_epi32(~0, ~0, ~0, ~0, ~0,  0,  0,  0),
+		_mm256_setr_epi32(~0, ~0, ~0, ~0, ~0, ~0,  0,  0),
+		_mm256_setr_epi32(~0, ~0, ~0, ~0, ~0, ~0, ~0,  0),
+		_mm256_setr_epi32(~0, ~0, ~0, ~0, ~0, ~0, ~0, ~0)
+	};
+
+	// Compute per-lane index list offset that guards against out of bounds memory accesses
+	__m256i safeTriIdxOffset = _mm256_and_si256(SIMD_TRI_IDX_OFFSET, SIMD_LANE_MASK[numLanes]);
+
+	for (int i = 0; i < numLanes * 3; i++)
+	{
+		IndexList[i] = inTrisPtr[i];
+	}
+
+
+	// Fetch triangle indices. 
+	__m256i vtxIdx[3];
+	vtxIdx[0] = _mmw_mullo_epi32(_mm256_i32gather_epi32((const int*)IndexList + 0, safeTriIdxOffset, 4), _mmw_set1_epi32(vtxLayout.mStride));
+	vtxIdx[1] = _mmw_mullo_epi32(_mm256_i32gather_epi32((const int*)IndexList + 1, safeTriIdxOffset, 4), _mmw_set1_epi32(vtxLayout.mStride));
+	vtxIdx[2] = _mmw_mullo_epi32(_mm256_i32gather_epi32((const int*)IndexList + 2, safeTriIdxOffset, 4), _mmw_set1_epi32(vtxLayout.mStride));
+
+
+	char *vPtr = (char *)inVtx;
+
+	// Fetch triangle vertices
+	for (int i = 0; i < 3; i++)
+	{
+		vtxX[i] = _mm256_i32gather_ps((float *)vPtr, vtxIdx[i], 1);
+		vtxY[i] = _mm256_i32gather_ps((float *)(vPtr + vtxLayout.mOffsetY), vtxIdx[i], 1);
+		vtxW[i] = _mm256_i32gather_ps((float *)(vPtr + vtxLayout.mOffsetW), vtxIdx[i], 1);
+	}
+}
+
 namespace MaskedOcclusionCullingAVX2
 {
 	static MaskedOcclusionCulling::Implementation gInstructionSet = MaskedOcclusionCulling::AVX2;

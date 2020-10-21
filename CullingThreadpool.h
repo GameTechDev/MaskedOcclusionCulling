@@ -276,6 +276,7 @@ public:
 	 * render jobs (see the CullingThreadpool() constructor).
 	 */
 	void RenderTriangles(const float *inVtx, const unsigned int *inTris, int nTris, BackfaceWinding bfWinding = MaskedOcclusionCulling::BACKFACE_CW, ClipPlanes clipPlaneMask = MaskedOcclusionCulling::CLIP_PLANE_ALL);
+	void RenderTriangles(const float *inVtx, const unsigned short *inTris, int nTris, BackfaceWinding bfWinding = MaskedOcclusionCulling::BACKFACE_CW, ClipPlanes clipPlaneMask = MaskedOcclusionCulling::CLIP_PLANE_ALL);
 
 	/*
 	 * \brief Occlusion query for a rectangle with a given depth, see MaskedOcclusionCulling::TestRect().

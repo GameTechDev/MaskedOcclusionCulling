@@ -227,7 +227,7 @@ MAKE_ACCESSOR(simd_i32, __m128i, int, const, 4)
 // Specialized SSE input assembly function for general vertex gather 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-FORCE_INLINE void GatherVertices(__m128 *vtxX, __m128 *vtxY, __m128 *vtxW, const float *inVtx, const unsigned int *inTrisPtr, int numLanes, const VertexLayout &vtxLayout)
+template<class INDEXTYPE> FORCE_INLINE void GatherVertices(__m128 *vtxX, __m128 *vtxY, __m128 *vtxW, const float *inVtx, const INDEXTYPE *inTrisPtr, int numLanes, const VertexLayout &vtxLayout)
 {
 	for (int lane = 0; lane < numLanes; lane++)
 	{

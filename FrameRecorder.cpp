@@ -59,6 +59,13 @@ void MaskedOcclusionCulling::RecorderStop( ) const
     mRecorder = nullptr;
 }
 
+void MaskedOcclusionCulling::RecordOrtho(bool Ortho)
+{
+	std::lock_guard<std::mutex> lock(mRecorderMutex);
+	if (mRecorder != nullptr)
+		mRecorder->RecordOrtho(Ortho);
+}
+
 void MaskedOcclusionCulling::RecordRenderTriangles( const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix, ClipPlanes clipPlaneMask, BackfaceWinding bfWinding, const VertexLayout &vtxLayout, CullingResult cullingResult )
 {
     std::lock_guard<std::mutex> lock( mRecorderMutex );
@@ -66,6 +73,12 @@ void MaskedOcclusionCulling::RecordRenderTriangles( const float *inVtx, const un
         mRecorder->RecordRenderTriangles( cullingResult, inVtx, inTris, nTris, modelToClipMatrix, clipPlaneMask, bfWinding, vtxLayout );
 }
 
+void MaskedOcclusionCulling::RecordRenderTriangles(const float *inVtx, const unsigned short *inTris, int nTris, const float *modelToClipMatrix, ClipPlanes clipPlaneMask, BackfaceWinding bfWinding, const VertexLayout &vtxLayout, CullingResult cullingResult)
+{
+	std::lock_guard<std::mutex> lock(mRecorderMutex);
+	if (mRecorder != nullptr)
+		mRecorder->RecordRenderTriangles(cullingResult, inVtx, inTris, nTris, modelToClipMatrix, clipPlaneMask, bfWinding, vtxLayout);
+}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Masked occlusion culling recorder
@@ -98,6 +111,7 @@ FrameRecorder::FrameRecorder( std::ofstream && outStream, const MaskedOcclusionC
     Write( &nearClipPlane, sizeof( nearClipPlane ) );
     Write( &width, sizeof( width ) );
     Write( &height, sizeof( height ) );
+	RecordOrtho(moc.GetOrtho());
 }
 
 FrameRecorder::~FrameRecorder( )
@@ -122,62 +136,120 @@ void FrameRecorder::Write( const void * buffer, size_t size )
 #endif
 }
 
-void FrameRecorder::WriteTriangleRecording( MaskedOcclusionCulling::CullingResult cullingResult, const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix, MaskedOcclusionCulling::ClipPlanes clipPlaneMask, MaskedOcclusionCulling::BackfaceWinding bfWinding, const MaskedOcclusionCulling::VertexLayout & vtxLayout )
+void FrameRecorder::WriteTriangleRecording(MaskedOcclusionCulling::CullingResult cullingResult, const float *inVtx, const unsigned short *inTris, int nTris, const float *modelToClipMatrix, MaskedOcclusionCulling::ClipPlanes clipPlaneMask, MaskedOcclusionCulling::BackfaceWinding bfWinding, const MaskedOcclusionCulling::VertexLayout & vtxLayout)
 {
-    // write culling result
-    Write( &cullingResult, sizeof( cullingResult ) );
+	// write culling result
+	Write(&cullingResult, sizeof(cullingResult));
 
-    unsigned int minVIndex = 0xffffffff;
-    unsigned int maxVIndex = 0;
-    for( int i = 0; i < nTris; i++ )
-    {
-        const unsigned int & a = inTris[i * 3 + 0];
-        const unsigned int & b = inTris[i * 3 + 1];
-        const unsigned int & c = inTris[i * 3 + 2];
-        minVIndex = std::min( std::min( minVIndex, a ), std::min( b, c ) );
-        maxVIndex = std::max( std::max( maxVIndex, a ), std::max( b, c ) );
-    }
+	unsigned int minVIndex = 0xffffffff;
+	unsigned int maxVIndex = 0;
+	for (int i = 0; i < nTris; i++)
+	{
+		const unsigned int & a = inTris[i * 3 + 0];
+		const unsigned int & b = inTris[i * 3 + 1];
+		const unsigned int & c = inTris[i * 3 + 2];
+		minVIndex = std::min(std::min(minVIndex, a), std::min(b, c));
+		maxVIndex = std::max(std::max(maxVIndex, a), std::max(b, c));
+	}
 
-    // write actually used vertex count
-    int vertexCount = ( maxVIndex < minVIndex ) ? ( 0 ) : ( maxVIndex - minVIndex + 1 );
-    Write( &vertexCount, sizeof( vertexCount ) );
+	// write actually used vertex count
+	int vertexCount = (maxVIndex < minVIndex) ? (0) : (maxVIndex - minVIndex + 1);
+	Write(&vertexCount, sizeof(vertexCount));
 
-    // nothing more to write? early exit
-    if( vertexCount == 0 )
-        return;
+	// nothing more to write? early exit
+	if (vertexCount == 0)
+		return;
 
-    // write vertex size
-    int vertexSize = vtxLayout.mStride;
-    Write( &vertexSize, sizeof( vertexSize ) );
+	// write vertex size
+	int vertexSize = vtxLayout.mStride;
+	Write(&vertexSize, sizeof(vertexSize));
 
-    // write vertices
-    Write( ( (const char*)inVtx ) + minVIndex*vertexSize, vertexSize * ( vertexCount ) );
+	// write vertices
+	Write(((const char*)inVtx) + minVIndex * vertexSize, vertexSize * (vertexCount));
 
-    // write triangle count
-    Write( &nTris, sizeof( nTris ) );
+	// write triangle count
+	Write(&nTris, sizeof(nTris));
 
-    // write indices with adjusted offset
-    for( int i = 0; i < nTris; i++ )
-    {
-        unsigned int triangleIndices[3];
-        triangleIndices[0] = inTris[i * 3 + 0] - minVIndex;
-        triangleIndices[1] = inTris[i * 3 + 1] - minVIndex;
-        triangleIndices[2] = inTris[i * 3 + 2] - minVIndex;
-        Write( triangleIndices, sizeof( triangleIndices ) );
-    }
+	// write indices with adjusted offset
+	for (int i = 0; i < nTris; i++)
+	{
+		unsigned int triangleIndices[3];
+		triangleIndices[0] = inTris[i * 3 + 0] - minVIndex;
+		triangleIndices[1] = inTris[i * 3 + 1] - minVIndex;
+		triangleIndices[2] = inTris[i * 3 + 2] - minVIndex;
+		Write(triangleIndices, sizeof(triangleIndices));
+	}
 
-    // write model to clip matrix (if any)
-    char hasMatrix = ( modelToClipMatrix != nullptr ) ? ( 1 ) : ( 0 );
-    Write( &hasMatrix, sizeof( hasMatrix ) );
-    if( hasMatrix )
-        Write( modelToClipMatrix, 16 * sizeof( float ) );
+	// write model to clip matrix (if any)
+	char hasMatrix = (modelToClipMatrix != nullptr) ? (1) : (0);
+	Write(&hasMatrix, sizeof(hasMatrix));
+	if (hasMatrix)
+		Write(modelToClipMatrix, 16 * sizeof(float));
 
-    Write( &clipPlaneMask, sizeof( clipPlaneMask ) );
+	Write(&clipPlaneMask, sizeof(clipPlaneMask));
 
-    Write( &bfWinding, sizeof( bfWinding ) );
+	Write(&bfWinding, sizeof(bfWinding));
 
-    // write vertex layout
-    Write( &vtxLayout, sizeof( vtxLayout ) );
+	// write vertex layout
+	Write(&vtxLayout, sizeof(vtxLayout));
+}
+
+void FrameRecorder::WriteTriangleRecording(MaskedOcclusionCulling::CullingResult cullingResult, const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix, MaskedOcclusionCulling::ClipPlanes clipPlaneMask, MaskedOcclusionCulling::BackfaceWinding bfWinding, const MaskedOcclusionCulling::VertexLayout & vtxLayout)
+{
+	// write culling result
+	Write(&cullingResult, sizeof(cullingResult));
+
+	unsigned int minVIndex = 0xffffffff;
+	unsigned int maxVIndex = 0;
+	for (int i = 0; i < nTris; i++)
+	{
+		const unsigned int & a = inTris[i * 3 + 0];
+		const unsigned int & b = inTris[i * 3 + 1];
+		const unsigned int & c = inTris[i * 3 + 2];
+		minVIndex = std::min(std::min(minVIndex, a), std::min(b, c));
+		maxVIndex = std::max(std::max(maxVIndex, a), std::max(b, c));
+	}
+
+	// write actually used vertex count
+	int vertexCount = (maxVIndex < minVIndex) ? (0) : (maxVIndex - minVIndex + 1);
+	Write(&vertexCount, sizeof(vertexCount));
+
+	// nothing more to write? early exit
+	if (vertexCount == 0)
+		return;
+
+	// write vertex size
+	int vertexSize = vtxLayout.mStride;
+	Write(&vertexSize, sizeof(vertexSize));
+
+	// write vertices
+	Write(((const char*)inVtx) + minVIndex * vertexSize, vertexSize * (vertexCount));
+
+	// write triangle count
+	Write(&nTris, sizeof(nTris));
+
+	// write indices with adjusted offset
+	for (int i = 0; i < nTris; i++)
+	{
+		unsigned int triangleIndices[3];
+		triangleIndices[0] = inTris[i * 3 + 0] - minVIndex;
+		triangleIndices[1] = inTris[i * 3 + 1] - minVIndex;
+		triangleIndices[2] = inTris[i * 3 + 2] - minVIndex;
+		Write(triangleIndices, sizeof(triangleIndices));
+	}
+
+	// write model to clip matrix (if any)
+	char hasMatrix = (modelToClipMatrix != nullptr) ? (1) : (0);
+	Write(&hasMatrix, sizeof(hasMatrix));
+	if (hasMatrix)
+		Write(modelToClipMatrix, 16 * sizeof(float));
+
+	Write(&clipPlaneMask, sizeof(clipPlaneMask));
+
+	Write(&bfWinding, sizeof(bfWinding));
+
+	// write vertex layout
+	Write(&vtxLayout, sizeof(vtxLayout));
 }
 
 namespace 
@@ -209,9 +281,18 @@ namespace
         }
     };
 }
+void FrameRecorder::RecordOrtho(bool ortho)
+{
+	char header = 4;
+	Write(&header, 1);
 
+	int iOrtho = ortho ? 1 : 0;
+	Write(&iOrtho, sizeof(int));
+
+}
 void FrameRecorder::RecordClearBuffer( )
 {
+#pragma message ("here")
     char header = 3;
     Write( &header, 1 );
 }
@@ -221,6 +302,12 @@ void FrameRecorder::RecordRenderTriangles( MaskedOcclusionCulling::CullingResult
     char header = 0;
     Write( &header, 1 );
     WriteTriangleRecording( cullingResult, inVtx, inTris, nTris, modelToClipMatrix, clipPlaneMask, bfWinding, vtxLayout );
+}
+void FrameRecorder::RecordRenderTriangles(MaskedOcclusionCulling::CullingResult cullingResult, const float *inVtx, const unsigned short *inTris, int nTris, const float *modelToClipMatrix, MaskedOcclusionCulling::ClipPlanes clipPlaneMask, MaskedOcclusionCulling::BackfaceWinding bfWinding, const MaskedOcclusionCulling::VertexLayout & vtxLayout)
+{
+	char header = 0;
+	Write(&header, 1);
+	WriteTriangleRecording(cullingResult, inVtx, inTris, nTris, modelToClipMatrix, clipPlaneMask, bfWinding, vtxLayout);
 }
 
 void FrameRecorder::RecordTestRect( MaskedOcclusionCulling::CullingResult cullingResult, float xmin, float ymin, float xmax, float ymax, float wmin )
@@ -243,6 +330,12 @@ void FrameRecorder::RecordTestTriangles( MaskedOcclusionCulling::CullingResult c
     WriteTriangleRecording( cullingResult, inVtx, inTris, nTris, modelToClipMatrix, clipPlaneMask, bfWinding, vtxLayout );
 }
 
+void FrameRecorder::RecordTestTriangles(MaskedOcclusionCulling::CullingResult cullingResult, const float *inVtx, const unsigned short *inTris, int nTris, const float *modelToClipMatrix, MaskedOcclusionCulling::ClipPlanes clipPlaneMask, MaskedOcclusionCulling::BackfaceWinding bfWinding, const MaskedOcclusionCulling::VertexLayout & vtxLayout)
+{
+	char header = 2;
+	Write(&header, 1);
+	WriteTriangleRecording(cullingResult, inVtx, inTris, nTris, modelToClipMatrix, clipPlaneMask, bfWinding, vtxLayout);
+}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Masked occlusion culling recording

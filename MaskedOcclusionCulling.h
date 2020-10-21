@@ -87,6 +87,13 @@
 
 #endif
 
+#ifndef MOC_ORTHO_GREATER_EQUAL
+ /*!
+  * Define MOC_ORTHO_GREATER_EQUAL to flip the compare on the depth value when near and far clipplanes are inverted, this is only needed when using ORTHOGRAPHIC projection)
+  */
+#define MOC_ORTHO_GREATER_EQUAL    1
+#endif
+
 #ifndef ENABLE_STATS
 /*!
  * Define ENABLE_STATS to 1 to gather various statistics during occlusion culling. Can be used for profiling 
@@ -326,6 +333,12 @@ public:
 	virtual void ClearBuffer() = 0;
 
 	/*!
+	* \brief Changed transform and clipping functiuons to expect an Orthographic matrix.
+	*/
+	virtual void SetOrtho(bool ortho) = 0;
+	virtual bool GetOrtho() const = 0;
+
+	/*!
 	* \brief Merge a second hierarchical depth buffer into the main buffer.
 	*/
 	virtual void MergeBuffer(MaskedOcclusionCulling* BufferB) = 0;
@@ -362,6 +375,7 @@ public:
 	 *         backface culled, returns VISIBLE otherwise.
 	 */
 	virtual CullingResult RenderTriangles(const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix = nullptr, BackfaceWinding bfWinding = BACKFACE_CW, ClipPlanes clipPlaneMask = CLIP_PLANE_ALL, const VertexLayout &vtxLayout = VertexLayout(16, 4, 12)) = 0;
+	virtual CullingResult RenderTriangles(const float *inVtx, const unsigned short *inTris, int nTris, const float *modelToClipMatrix = nullptr, BackfaceWinding bfWinding = BACKFACE_CW, ClipPlanes clipPlaneMask = CLIP_PLANE_ALL, const VertexLayout &vtxLayout = VertexLayout(16, 4, 12)) = 0;
 
 	/*!
 	 * \brief Occlusion query for a rectangle with a given depth. The rectangle is given 
@@ -574,7 +588,9 @@ public:
     // 
     // merge the binned data back into original layout; in this case, call it manually from your Threadpool implementation (already added to CullingThreadpool).
     // If recording is not enabled, calling this function will do nothing.
-    void RecordRenderTriangles( const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix = nullptr, ClipPlanes clipPlaneMask = CLIP_PLANE_ALL, BackfaceWinding bfWinding = BACKFACE_CW, const VertexLayout &vtxLayout = VertexLayout( 16, 4, 12 ), CullingResult cullingResult = (CullingResult)-1 );
+	void RecordRenderTriangles(const float *inVtx, const unsigned int *inTris, int nTris, const float *modelToClipMatrix = nullptr, ClipPlanes clipPlaneMask = CLIP_PLANE_ALL, BackfaceWinding bfWinding = BACKFACE_CW, const VertexLayout &vtxLayout = VertexLayout(16, 4, 12), CullingResult cullingResult = (CullingResult)-1);
+	void RecordRenderTriangles(const float *inVtx, const unsigned short *inTris, int nTris, const float *modelToClipMatrix = nullptr, ClipPlanes clipPlaneMask = CLIP_PLANE_ALL, BackfaceWinding bfWinding = BACKFACE_CW, const VertexLayout &vtxLayout = VertexLayout(16, 4, 12), CullingResult cullingResult = (CullingResult)-1);
+	void RecordOrtho(bool Ortho);
 #endif // #if MOC_RECORDER_ENABLE
 
 protected:
