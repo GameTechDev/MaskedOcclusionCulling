@@ -275,13 +275,9 @@ public:
 		mFullscreenScissor.mMaxX = mTilesWidth << TILE_WIDTH_SHIFT;
 		mFullscreenScissor.mMaxY = mTilesHeight << TILE_HEIGHT_SHIFT;
 
+
 		// Adjust clip planes to include a small guard band to avoid clipping leaks
-		float guardBandWidth = (2.0f / (float)mWidth) * GUARD_BAND_PIXEL_SIZE;
-		float guardBandHeight = (2.0f / (float)mHeight) * GUARD_BAND_PIXEL_SIZE;
-		mCSFrustumPlanes[1] = _mm_setr_ps(1.0f - guardBandWidth, 0.0f, 1.0f, 0.0f);
-		mCSFrustumPlanes[2] = _mm_setr_ps(-1.0f + guardBandWidth, 0.0f, 1.0f, 0.0f);
-		mCSFrustumPlanes[3] = _mm_setr_ps(0.0f, 1.0f - guardBandHeight, 1.0f, 0.0f);
-		mCSFrustumPlanes[4] = _mm_setr_ps(0.0f, -1.0f + guardBandHeight, 1.0f, 0.0f);
+		SetOrtho(mOrtho);
 
 		// Allocate masked hierarchical Z buffer (if zero size leave at nullptr)
 		if(mTilesWidth * mTilesHeight > 0)
