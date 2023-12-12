@@ -83,3 +83,6 @@ add_library( MaskedOcclusionCulling ${MOC_FILES} )
 # Add folder to include path
 #
 target_include_directories(MaskedOcclusionCulling PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
+install(FILES MaskedOcclusionCulling.h FrameRecorder.h CullingThreadpool.h TYPE INCLUDE)
+install(TARGETS MaskedOcclusionCulling ARCHIVE LIBRARY RUNTIME)
